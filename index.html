@@ -79,7 +79,15 @@
         <label><span>Graphics quality<small>Adjust shadows and rendering detail</small></span><select id="qualitySetting"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
         <label><span>Master volume<small>Interface and ambience volume</small></span><input id="volumeSetting" type="range" min="0" max="100" value="70" /></label>
         <label><span>Brightness<small>Dungeon exposure and shadow visibility</small></span><input id="brightnessSetting" type="range" min="70" max="160" value="125" /></label>
+        <label><span>Fog density<small>Strength of atmospheric dungeon haze</small></span><input id="fogSetting" type="range" min="0" max="100" value="55" /></label>
+        <label><span>Torch intensity<small>Brightness of torches and braziers</small></span><input id="torchSetting" type="range" min="50" max="180" value="110" /></label>
+        <label><span>Grid opacity<small>Visibility of the construction grid</small></span><input id="gridSetting" type="range" min="10" max="100" value="60" /></label>
+        <label><span>Explore field of view<small>Width of the first-person camera view</small></span><input id="fovSetting" type="range" min="50" max="85" value="68" /></label>
         <label><span>Camera speed<small>Build and exploration movement speed</small></span><input id="speedSetting" type="range" min="50" max="150" value="100" /></label>
+        <label><span>Mouse sensitivity<small>Speed of camera orbit and first-person look</small></span><input id="sensitivitySetting" type="range" min="50" max="150" value="100" /></label>
+        <label class="check-row"><span>Show construction grid<small>Display the grid while in Build mode</small></span><input id="showGridSetting" type="checkbox" checked /></label>
+        <label class="check-row"><span>Invert vertical look<small>Reverse first-person mouse Y movement</small></span><input id="invertSetting" type="checkbox" /></label>
+        <label class="check-row"><span>Autosave<small>Save after building, decorating, or demolishing</small></span><input id="autosaveSetting" type="checkbox" checked /></label>
         <label class="check-row"><span>Reduce motion<small>Disables animated interface transitions</small></span><input id="motionSetting" type="checkbox" /></label>
         <div class="settings-actions"><button id="resetSettings">RESET DEFAULTS</button><button id="applySettings" class="primary">APPLY</button></div>
       </div>
