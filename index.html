@@ -39,6 +39,10 @@
         <button class="decor-tool" data-decor="statue" title="Stone Statue"><span>♟</span>STATUE</button>
         <button class="decor-tool" data-decor="cage" title="Iron Cage"><span>▦</span>CAGE</button>
         <button class="decor-tool" data-decor="rubble" title="Rubble Pile"><span>◆</span>RUBBLE</button>
+        <button class="decor-tool" data-decor="weaponrack" title="Weapon Rack"><span>⚔</span>WEAPONS</button>
+        <button class="decor-tool" data-decor="cot" title="Barracks Cot"><span>▱</span>COT</button>
+        <button class="decor-tool" data-decor="cauldron" title="Cooking Cauldron"><span>♨</span>CAULDRON</button>
+        <button class="decor-tool" data-decor="goldpile" title="Gold Hoard"><span>●</span>GOLD</button>
       </div>
       <div class="divider"></div>
       <p id="selectionLabel" class="eyebrow">SELECTED ROOM</p>
@@ -53,6 +57,18 @@
       <button id="deleteBtn" class="tool compact danger"><span class="tool-icon">×</span><span>Demolish</span><kbd>Del</kbd></button>
       <div class="divider"></div>
       <p class="eyebrow">ROOM DRESSING</p>
+      <select id="roleSelect" class="keep-select" aria-label="Selected room function">
+        <option value="unassigned">Unassigned chamber</option>
+        <option value="treasury">Treasury</option>
+        <option value="barracks">Barracks</option>
+        <option value="guard">Guard room</option>
+        <option value="library">Library</option>
+        <option value="kitchen">Kitchen</option>
+        <option value="workshop">Workshop</option>
+        <option value="crypt">Crypt</option>
+        <option value="prison">Prison</option>
+        <option value="throne">Throne room</option>
+      </select>
       <select id="conditionSelect" class="keep-select" aria-label="Selected room condition">
         <option value="occupied">Occupied</option>
         <option value="pristine">Pristine</option>
@@ -62,6 +78,8 @@
         <option value="haunted">Haunted</option>
       </select>
       <button id="dressRoomBtn" class="tool compact"><span class="tool-icon">✦</span><span>Auto-dress room</span></button>
+      <button id="doorBtn" class="tool compact"><span class="tool-icon">▥</span><span>Close room doors</span><kbd>O</kbd></button>
+      <button id="pathTestBtn" class="tool compact"><span class="tool-icon">♟</span><span>Send keeper here</span><kbd>P</kbd></button>
       <button id="heroRoomBtn" class="tool compact hero-tool"><span class="tool-icon">♜</span><span>Build throne hall<small>Hero room preset</small></span></button>
       <div class="theme-card">
         <span class="swatch"></span><div><small>ACTIVE THEME</small><strong>Stone Keep</strong></div>
