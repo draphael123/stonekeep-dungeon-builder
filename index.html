@@ -31,7 +31,23 @@
     </header>
     <aside class="palette">
       <p class="eyebrow">CONSTRUCTION</p>
-      <button id="roomTool" class="tool active"><span class="tool-icon">▦</span><span>Stone Room<small>Drag on the grid</small></span><kbd>1</kbd></button>
+      <div class="room-type-grid">
+        <button id="roomTool" class="room-type active" data-room-role="unassigned"><span>▦</span><b>Chamber</b><small>Flexible space</small></button>
+        <button class="room-type" data-room-role="treasury"><span>◆</span><b>Treasury</b><small>Stores & earns gold</small></button>
+        <button class="room-type" data-room-role="barracks"><span>▱</span><b>Barracks</b><small>Workers rest here</small></button>
+        <button class="room-type" data-room-role="kitchen"><span>♨</span><b>Kitchen</b><small>Produces food</small></button>
+        <button class="room-type" data-room-role="guard"><span>⚔</span><b>Guard room</b><small>Secures passages</small></button>
+        <button class="room-type" data-room-role="library"><span>▥</span><b>Library</b><small>Future research</small></button>
+        <button class="room-type" data-room-role="workshop"><span>⚒</span><b>Workshop</b><small>Future traps</small></button>
+        <button class="room-type" data-room-role="crypt"><span>♰</span><b>Crypt</b><small>Undead quarters</small></button>
+        <button class="room-type" data-room-role="prison"><span>▦</span><b>Prison</b><small>Holds captives</small></button>
+        <button class="room-type" data-room-role="infirmary"><span>✚</span><b>Infirmary</b><small>Restores health</small></button>
+        <button class="room-type" data-room-role="tavern"><span>♨</span><b>Tavern</b><small>Raises morale</small></button>
+        <button class="room-type" data-room-role="training"><span>◎</span><b>Training hall</b><small>Improves guards</small></button>
+        <button class="room-type" data-room-role="alchemy"><span>⚗</span><b>Alchemy lab</b><small>Future potions</small></button>
+        <button class="room-type" data-room-role="shrine"><span>✦</span><b>Dark shrine</b><small>Generates influence</small></button>
+      </div>
+      <div id="buildPurpose" class="build-purpose"><b>UNASSIGNED CHAMBER</b><span>5 gold per tile</span><p>A flexible chamber with no production. Assign its purpose later.</p></div>
       <div class="divider"></div>
       <p class="eyebrow">DECORATIONS</p>
       <div class="decor-grid">
@@ -76,6 +92,11 @@
         <option value="workshop">Workshop</option>
         <option value="crypt">Crypt</option>
         <option value="prison">Prison</option>
+        <option value="infirmary">Infirmary</option>
+        <option value="tavern">Tavern</option>
+        <option value="training">Training hall</option>
+        <option value="alchemy">Alchemy laboratory</option>
+        <option value="shrine">Dark shrine</option>
         <option value="throne">Throne room</option>
       </select>
       <select id="conditionSelect" class="keep-select" aria-label="Selected room condition">
