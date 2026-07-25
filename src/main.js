@@ -33,6 +33,8 @@ const ROOM_TYPES={
   ,storehouse:{name:'Storehouse',cost:5,purpose:'Raises material capacity and shortens hauling routes.',needs:'Requires a worker'}
   ,lumberyard:{name:'Lumber Yard',cost:4,purpose:'Processes timber for buildings, furniture, and defenses.',needs:'Requires a woodcutter'}
   ,road:{name:'Road',cost:1,purpose:'Connects buildings and prepares faster outdoor travel.',needs:'No worker required'}
+  ,cobble:{name:'Cobblestone Road',cost:3,purpose:'A durable all-weather road that provides the fastest travel.',needs:'55% movement bonus'}
+  ,boardwalk:{name:'Timber Boardwalk',cost:2,purpose:'Raised planks cross damp, muddy, or uneven terrain without slowing.',needs:'35% movement bonus'}
   ,watchtower:{name:'Watchtower',cost:9,purpose:'Extends sight and protects the settlement boundary.',needs:'Requires a guard'}
   ,well:{name:'Village Well',cost:4,purpose:'A communal water source and natural gathering point.',needs:'No worker required'}
   ,fence:{name:'Fence',cost:1,purpose:'Defines farms, gardens, yards, and settlement boundaries.',needs:'No worker required'}
@@ -191,6 +193,8 @@ function addSurfaceBuilding(group,room){
     for(let i=0;i<Math.max(2,room.w*room.d*2);i++){const pebble=addCylinder(group,.035+(i%3)*.018,.018,[room.x*CELL+.25+(i*.83%(room.w*CELL-.5)),.045,room.z*CELL+.25+(i*1.17%(room.d*CELL-.5))],roadEdgeMaterial,7);pebble.scale.z=1.7;}
     return;
   }
+  if(room.role==='cobble'){addBox(group,[room.w*CELL+.08,.07,room.d*CELL+.08],[cx,.015,cz],roadEdgeMaterial,false);for(let x=room.x;x<room.x+room.w;x++)for(let z=room.z;z<room.z+room.d;z++)for(let i=0;i<5;i++){const stone=addBox(group,[.34+(i%2)*.11,.055,.3+(i%3)*.08],[(x+.22+(i*.19)%.68)*CELL,.075,(z+.2+(i*.31)%.7)*CELL],i%2?mats.wallTop:mats.wall,false);stone.rotation.y=(i+x+z)*.37;}return;}
+  if(room.role==='boardwalk'){const alongX=room.w>=room.d;for(let x=room.x;x<room.x+room.w;x++)for(let z=room.z;z<room.z+room.d;z++){addBox(group,alongX?[CELL+.05,.12,.68]:[.68,.12,CELL+.05],[(x+.5)*CELL,.18,(z+.5)*CELL],mats.wood);for(const off of [-.23,.23])addBox(group,alongX?[CELL+.08,.07,.07]:[.07,.07,CELL+.08],[(x+.5)*CELL,.27,(z+.5)*CELL],mats.brass,false);}for(const x of [room.x*CELL+.18,(room.x+room.w)*CELL-.18])for(const z of [room.z*CELL+.18,(room.z+room.d)*CELL-.18])addBox(group,[.1,.55,.1],[x,.25,z],mats.wood);return;}
   if(room.role==='farm'){
     addBox(group,[w,.09,d],[cx,.015,cz],soilMaterial,false);
     const alongX=room.w>=room.d,rows=Math.max(2,Math.floor((alongX?room.d:room.w)*2));for(let i=0;i<rows;i++){const t=(i+.5)/rows-.5;addBox(group,alongX?[w-.25,.075,.18]:[.18,.075,d-.25],[alongX?cx:cx+t*(w-.3),.09,alongX?cz+t*(d-.3):cz],furrowMaterial,false);}
@@ -217,7 +221,7 @@ function addSurfaceBuilding(group,room){
 function addCylinder(group,r,depth,pos,material,segments=10){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,depth,segments),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;
 }
-const ROLE_REQUIREMENTS={treasury:['chest','goldpile'],barracks:['cot','bedroll'],guard:['weaponrack'],library:['bookshelf'],kitchen:['cauldron'],workshop:['table','crate'],crypt:['statue'],prison:['cage'],infirmary:['cot'],tavern:['table','bench'],training:['weaponrack'],alchemy:['cauldron','table'],shrine:['statue','brazier'],throne:['banner'],heart:[],hall:[],cottage:[],forge:[],farm:[],storehouse:[],lumberyard:[],road:[],watchtower:[],well:[],fence:[],market:[],orchard:[]};
+const ROLE_REQUIREMENTS={treasury:['chest','goldpile'],barracks:['cot','bedroll'],guard:['weaponrack'],library:['bookshelf'],kitchen:['cauldron'],workshop:['table','crate'],crypt:['statue'],prison:['cage'],infirmary:['cot'],tavern:['table','bench'],training:['weaponrack'],alchemy:['cauldron','table'],shrine:['statue','brazier'],throne:['banner'],heart:[],hall:[],cottage:[],forge:[],farm:[],storehouse:[],lumberyard:[],road:[],cobble:[],boardwalk:[],watchtower:[],well:[],fence:[],market:[],orchard:[]};
 function roomOperational(room){
   if(!room.role||room.role==='unassigned')return false;if(room.condition==='battle'||room.condition==='abandoned')return false;
   const types=new Set(state.decorations.filter(d=>d.roomId===room.id).map(d=>d.type));return (ROLE_REQUIREMENTS[room.role]||[]).some(t=>types.has(t))||(ROLE_REQUIREMENTS[room.role]||[]).length===0;
@@ -381,7 +385,7 @@ function updateSelection() {
   if(d){const ring=new THREE.Mesh(new THREE.RingGeometry(.72,.86,32),new THREE.MeshBasicMaterial({color:0xe1b85b,side:THREE.DoubleSide,transparent:true,opacity:.9}));ring.rotation.x=-Math.PI/2;ring.position.set((d.x+.5)*CELL,.22,(d.z+.5)*CELL);selectionGroup.add(ring);}
   else if(r){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w*CELL+.12,.08,r.d*CELL+.12),mats.selected);m.position.set((r.x+r.w/2)*CELL,.25,(r.z+r.d/2)*CELL);selectionGroup.add(m);}
   document.querySelector('#rotateBtn').disabled=!r&&!d; document.querySelector('#deleteBtn').disabled=!r&&!d;
-  const canCutaway=!!r&&state.layer==='surface'&&!['road','farm','fence','well','market','orchard','lumberyard'].includes(r.role);document.querySelector('#cutawayBtn').disabled=!canCutaway||!!d;document.querySelector('#cutawayBtn').style.display=state.layer==='surface'?'flex':'none';document.querySelector('#cutawayBtn span:nth-child(2)').textContent=state.cutawayRoom===r?.id?'Close roof':'Open interior';
+  const canCutaway=!!r&&state.layer==='surface'&&!['road','cobble','boardwalk','farm','fence','well','market','orchard','lumberyard'].includes(r.role);document.querySelector('#cutawayBtn').disabled=!canCutaway||!!d;document.querySelector('#cutawayBtn').style.display=state.layer==='surface'?'flex':'none';document.querySelector('#cutawayBtn span:nth-child(2)').textContent=state.cutawayRoom===r?.id?'Close roof':'Open interior';
   document.querySelector('#selectionLabel').textContent=d?'SELECTED DECORATION':'SELECTED ROOM';
   document.querySelector('#decorOptions').classList.toggle('hidden',!d);
   document.querySelector('#rotateBtn span:nth-child(2)').textContent=d?'Turn 90°':'Rotate';
@@ -390,7 +394,7 @@ function updateSelection() {
   document.querySelector('#selectionInfo').textContent=d?`${d.type[0].toUpperCase()+d.type.slice(1)} · ${Math.round((d.rotation||0)*180/Math.PI)%360}° · ${Math.round((d.scale||1)*100)}%`:r?`${roomType.name} · ${r.w} × ${r.d} tiles${r.role&&r.role!=='unassigned'?` · ${roomOperational(r)?'Operational':'Inactive'}`:''}. ${roomType.purpose}`:'Choose a room purpose, then drag across the grid.';
   const conditionSelect=document.querySelector('#conditionSelect');conditionSelect.disabled=!r||!!d;if(r)conditionSelect.value=r.condition||'occupied';
   const roleSelect=document.querySelector('#roleSelect');roleSelect.disabled=!r||!!d||r?.role==='heart'||state.layer==='surface';if(r&&ROOM_TYPES[r.role])roleSelect.value=r.role||'unassigned';
-  document.querySelector('#dressRoomBtn').disabled=!r||!!d||r?.role==='heart'||r?.role==='road'||r?.role==='farm'||r?.role==='lumberyard';
+  document.querySelector('#dressRoomBtn').disabled=!r||!!d||r?.role==='heart'||['road','cobble','boardwalk','farm','lumberyard','fence','well','market','orchard'].includes(r?.role);
   document.querySelector('#doorBtn').disabled=!r||!!d||state.layer==='surface';document.querySelector('#pathTestBtn').disabled=!r||!!d;
   document.querySelector('#doorBtn span:nth-child(2)').textContent=r?.doorsOpen===false?'Open room doors':'Close room doors';
   world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=state.mode==='explore'||o.userData.roomId!==state.cutawayRoom;});
@@ -574,10 +578,11 @@ function assignWorkerTask(worker){
   if(!target){const workRooms=operational.filter(r=>['treasury','kitchen','workshop','guard','hall','forge','farm','storehouse','lumberyard','watchtower','well','market','orchard'].includes(r.role)&&(r.layer||'underground')===state.layer);target=workRooms[(Math.floor(state.simTime/5)+u.index)%Math.max(1,workRooms.length)];task=target?`Working in ${target.role}`:'Waiting for an operational room';}
   if(!target)return;const start={x:Math.floor(worker.position.x/CELL),z:Math.floor(worker.position.z/CELL)},goal=roomCenterCell(target),path=findPath(start,goal);if(path.length){u.path=path.slice(1);u.targetRoom=target.id;u.task=task;}
 }
+function terrainSpeedAt(x,z){const roomId=occupiedMap().get(cellKey(x,z)),role=state.rooms.find(r=>r.id===roomId)?.role;return role==='cobble'?1.55:role==='boardwalk'?1.35:role==='road'?1.2:1;}
 function updateWorker(worker,dt){
   const u=worker.userData;u.hunger=Math.max(0,u.hunger-dt*.42*difficulty().hunger);u.rest=Math.max(0,u.rest-dt*.18);u.morale=Math.max(15,Math.min(100,u.morale+dt*(u.hunger>35?.05:-.18)));
   if(!u.path.length){u.leftArm.rotation.x*=.82;u.rightArm.rotation.x*=.82;u.leftLeg.rotation.x*=.82;u.rightLeg.rotation.x*=.82;const room=state.rooms.find(r=>r.id===u.targetRoom);if(room?.role==='kitchen'&&state.food>=1&&u.hunger<85){state.food-=1;u.hunger=Math.min(100,u.hunger+28);}if(room?.role==='barracks')u.rest=Math.min(100,u.rest+dt*8);if(Math.floor(state.simTime+u.index)%4===0)assignWorkerTask(worker);return;}
-  const cell=u.path[0],target=new THREE.Vector3((cell.x+.5)*CELL,.08,(cell.z+.5)*CELL),delta=target.clone().sub(worker.position);if(delta.length()<.07)u.path.shift();else{worker.rotation.y=Math.atan2(delta.x,delta.z);worker.position.addScaledVector(delta.normalize(),Math.min(1.75*dt,delta.length()));worker.position.y=.08+Math.abs(Math.sin(state.simTime*7+u.index))*.035;}
+  const cell=u.path[0],target=new THREE.Vector3((cell.x+.5)*CELL,.08,(cell.z+.5)*CELL),delta=target.clone().sub(worker.position);if(delta.length()<.07)u.path.shift();else{worker.rotation.y=Math.atan2(delta.x,delta.z);worker.position.addScaledVector(delta.normalize(),Math.min(1.75*terrainSpeedAt(cell.x,cell.z)*dt,delta.length()));worker.position.y=.08+Math.abs(Math.sin(state.simTime*7+u.index))*.035;}
   const swing=Math.sin(state.simTime*8+u.walkPhase)*.55;u.leftArm.rotation.x=swing;u.rightArm.rotation.x=-swing;u.leftLeg.rotation.x=-swing*.65;u.rightLeg.rotation.x=swing*.65;
 }
 function simulateStep(){
@@ -723,7 +728,7 @@ function tick(){
     exploreCamera.rotation.order='YXZ';exploreCamera.rotation.y=exploreYaw;exploreCamera.rotation.x=explorePitch;
     const f=new THREE.Vector3(-Math.sin(exploreYaw),0,-Math.cos(exploreYaw)),r=new THREE.Vector3(-f.z,0,f.x),m=new THREE.Vector3();
     if(keys.has('KeyW'))m.add(f);if(keys.has('KeyS'))m.sub(f);if(keys.has('KeyD'))m.add(r);if(keys.has('KeyA'))m.sub(r);
-    if(m.lengthSq()){const next=exploreCamera.position.clone().addScaledVector(m.normalize(),speed*dt);const cx=Math.floor(next.x/CELL),cz=Math.floor(next.z/CELL);if(occupiedMap().has(cellKey(cx,cz)))exploreCamera.position.copy(next);}
+    if(m.lengthSq()){const cx0=Math.floor(exploreCamera.position.x/CELL),cz0=Math.floor(exploreCamera.position.z/CELL),next=exploreCamera.position.clone().addScaledVector(m.normalize(),speed*terrainSpeedAt(cx0,cz0)*dt),cx=Math.floor(next.x/CELL),cz=Math.floor(next.z/CELL);if(occupiedMap().has(cellKey(cx,cz)))exploreCamera.position.copy(next);}
     exploreCamera.position.y=1.65;
   }
   renderer.render(scene,camera);requestAnimationFrame(tick);
