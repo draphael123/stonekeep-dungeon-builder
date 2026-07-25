@@ -61,8 +61,8 @@ sun.position.set(-18, 28, 14); sun.intensity*=1.35;sun.castShadow = true; sun.sh
 sun.shadow.camera.left = sun.shadow.camera.bottom = -35; sun.shadow.camera.right = sun.shadow.camera.top = 35;
 scene.add(sun);
 
-const world = new THREE.Group(), previewGroup = new THREE.Group(), selectionGroup = new THREE.Group(), atmosphereGroup=new THREE.Group(), effectsGroup=new THREE.Group(), terrainGroup=new THREE.Group();
-scene.add(world, previewGroup, selectionGroup, atmosphereGroup, effectsGroup,terrainGroup);
+const world = new THREE.Group(), previewGroup = new THREE.Group(), selectionGroup = new THREE.Group(), atmosphereGroup=new THREE.Group(), effectsGroup=new THREE.Group(), terrainGroup=new THREE.Group(),lifeGroup=new THREE.Group();
+scene.add(world, previewGroup, selectionGroup, atmosphereGroup, effectsGroup,terrainGroup,lifeGroup);
 
 const grid = new THREE.GridHelper(80, 40, 0x86754f, 0x353b38);
 grid.position.y = .012; grid.material.transparent = true; grid.material.opacity = .6; scene.add(grid);
@@ -79,6 +79,7 @@ const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
 const plane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
 let rightDrag = false, lastPointer = {x:0,y:0}, toastTimer;
 const animatedFlames=[],floatingMotes=[];
+const birds=[],clouds=[],butterflies=[];let rain;
 const keeper=new THREE.Group();const keeperBody=addCylinder(keeper,.22,.82,[0,.52,0],mats.leather,10);const keeperHead=new THREE.Mesh(new THREE.SphereGeometry(.18,10,8),mats.brass);keeperHead.position.y=1.02;keeper.add(keeperHead);const keeperLight=new THREE.PointLight(0xffa34d,1.8,5,2);keeperLight.position.y=1.25;keeper.add(keeperLight);keeper.visible=false;scene.add(keeper);
 const workers=[];
 function makeWorker(index){
@@ -106,6 +107,16 @@ function buildAtmosphere(){
   motes.userData.baseY=positions.slice();atmosphereGroup.add(motes);floatingMotes.push(motes);
 }
 buildAtmosphere();
+function buildAmbientLife(){
+  const birdMat=new THREE.MeshStandardMaterial({color:0x292724,roughness:1,side:THREE.DoubleSide});
+  for(let flock=0;flock<4;flock++)for(let i=0;i<5;i++){const bird=new THREE.Group(),left=addBox(bird,[.34,.025,.1],[-.16,0,0],birdMat,false),right=addBox(bird,[.34,.025,.1],[.16,0,0],birdMat,false);left.rotation.z=.18;right.rotation.z=-.18;bird.userData={flock,index:i,left,right,radius:16+flock*5,phase:flock*1.7+i*.18};bird.position.y=7+flock*1.2;lifeGroup.add(bird);birds.push(bird);}
+  const cloudMat=new THREE.MeshStandardMaterial({color:0xc7d0c8,transparent:true,opacity:.24,roughness:1,depthWrite:false});
+  for(let i=0;i<7;i++){const cloud=new THREE.Group();for(let j=0;j<5;j++){const puff=new THREE.Mesh(new THREE.SphereGeometry(2+(j%3)*.65,10,7),cloudMat);puff.scale.y=.45;puff.position.set((j-2)*1.5,(j%2)*.4,Math.sin(j*2)*.8);cloud.add(puff);}cloud.position.set(-38+i*12,11+(i%3)*1.4,-24+(i%4)*15);cloud.userData.speed=.45+(i%3)*.12;lifeGroup.add(cloud);clouds.push(cloud);}
+  const butterflyMats=[new THREE.MeshBasicMaterial({color:0xe1bd57,side:THREE.DoubleSide}),new THREE.MeshBasicMaterial({color:0x8fb6a0,side:THREE.DoubleSide})];
+  for(let i=0;i<14;i++){const b=new THREE.Group(),l=addBox(b,[.12,.015,.09],[-.07,0,0],butterflyMats[i%2],false),r=addBox(b,[.12,.015,.09],[.07,0,0],butterflyMats[i%2],false);b.position.set(Math.cos(i*2.4)*(8+i%5*2),.65+(i%3)*.18,Math.sin(i*2.4)*(8+i%5*2));b.userData={left:l,right:r,phase:i*.8,origin:b.position.clone()};lifeGroup.add(b);butterflies.push(b);}
+  const rainPositions=new Float32Array(520*3);for(let i=0;i<520;i++){rainPositions[i*3]=(Math.random()-.5)*70;rainPositions[i*3+1]=Math.random()*16;rainPositions[i*3+2]=(Math.random()-.5)*70;}const rainGeo=new THREE.BufferGeometry();rainGeo.setAttribute('position',new THREE.BufferAttribute(rainPositions,3));rain=new THREE.Points(rainGeo,new THREE.PointsMaterial({color:0xa9c4c7,size:.035,transparent:true,opacity:0,depthWrite:false}));lifeGroup.add(rain);
+}
+buildAmbientLife();
 
 function updateBuildCamera() {
   const cp = Math.cos(cam.pitch);
@@ -134,7 +145,7 @@ function addBox(group, size, pos, material, cast=true) {
 function buildSurfaceTerrain(){
   terrainGroup.clear();
   for(let i=0;i<14;i++){const angle=i*2.18,radius=14+(i%5)*4,patch=new THREE.Mesh(new THREE.CircleGeometry(3.2+(i%4)*1.15,18),i%3?meadowMaterial:dryGrassMaterial);patch.rotation.x=-Math.PI/2;patch.position.set(Math.cos(angle)*radius,-.065,Math.sin(angle)*radius);patch.scale.y=.55+(i%3)*.2;patch.receiveShadow=true;terrainGroup.add(patch);}
-  for(let i=0;i<58;i++){const angle=i*2.399,radius=22+(i%10)*2.15,x=Math.cos(angle)*radius,z=Math.sin(angle)*radius;addCylinder(terrainGroup,.14+(i%3)*.035,1.8+(i%5)*.22,[x,.9+(i%5)*.11,z],mats.wood,8);const crown=new THREE.Mesh(i%4===0?new THREE.SphereGeometry(.75+(i%3)*.14,8,6):new THREE.ConeGeometry(.78+(i%3)*.14,2+(i%4)*.25,8),i%5===0?dryGrassMaterial:mats.moss);crown.position.set(x,2.15+(i%5)*.2,z);crown.castShadow=true;terrainGroup.add(crown);}
+  for(let i=0;i<58;i++){const angle=i*2.399,radius=22+(i%10)*2.15,x=Math.cos(angle)*radius,z=Math.sin(angle)*radius;addCylinder(terrainGroup,.14+(i%3)*.035,1.8+(i%5)*.22,[x,.9+(i%5)*.11,z],mats.wood,8);const crown=new THREE.Mesh(i%4===0?new THREE.SphereGeometry(.75+(i%3)*.14,8,6):new THREE.ConeGeometry(.78+(i%3)*.14,2+(i%4)*.25,8),i%5===0?dryGrassMaterial:mats.moss);crown.position.set(x,2.15+(i%5)*.2,z);crown.castShadow=true;crown.userData.wind=i*.31;terrainGroup.add(crown);}
   for(let i=0;i<42;i++){const angle=i*1.73,radius=12+(i%9)*3,rock=addBox(terrainGroup,[.22+(i%3)*.17,.16+(i%2)*.14,.26+(i%4)*.13],[Math.cos(angle)*radius,.06,Math.sin(angle)*radius],i%4?mats.wallTop:mats.wall);rock.rotation.y=i*.58;rock.rotation.z=(i%3-.5)*.13;}
   for(let i=0;i<65;i++){const angle=i*2.71,radius=13+(i%13)*2,x=Math.cos(angle)*radius,z=Math.sin(angle)*radius;for(const off of [-.09,.09]){const blade=addBox(terrainGroup,[.025,.3+(i%3)*.08,.025],[x+off,.15,z+off],i%4?cropMaterial:dryGrassMaterial,false);blade.rotation.z=off*2.5;}if(i%5===0){const bloom=new THREE.Mesh(new THREE.SphereGeometry(.045,6,4),i%10?flowerMaterial:mats.banner);bloom.position.set(x,.38,z);terrainGroup.add(bloom);}}
   for(let i=0;i<7;i++){const a=i*2.3,r=18+(i%3)*5,x=Math.cos(a)*r,z=Math.sin(a)*r;const log=addCylinder(terrainGroup,.2,2.3,[x,.22,z],mats.wood,9);log.rotation.z=Math.PI/2;log.rotation.y=a;for(const end of [-1,1])addCylinder(terrainGroup,.23,.05,[x+Math.cos(a)*end,z*.0+.22,z+Math.sin(a)*end],mats.wallTop,9);}
@@ -533,6 +544,7 @@ function setLayer(layer){
   ground.material.color.set(layer==='surface'?0x334330:0x252c29);scene.background.set(layer==='surface'?0x78908a:theme.atmosphere.background);scene.fog.color.set(layer==='surface'?0x71827b:theme.atmosphere.fogColor);
   workers.forEach(w=>w.visible=layer==='surface'&&state.rooms.some(r=>r.layer==='surface'));
   terrainGroup.visible=layer==='surface';
+  lifeGroup.visible=layer==='surface';
   selectRoomType(layer==='surface'?'cottage':'unassigned');buildWorld();toast(layer==='surface'?'Surface stronghold':'Underground works');
 }
 
@@ -685,6 +697,14 @@ function tick(){
   const simDt=dt*state.timeScale;state.simTime+=simDt;state.simAccumulator+=simDt;if(state.simAccumulator>=1){state.simAccumulator-=1;simulateStep();}for(const worker of workers)if(worker.visible)updateWorker(worker,simDt);
   for(const flame of animatedFlames){const pulse=1+Math.sin(elapsed*9+(flame.userData.phase||0))*.08;flame.scale.y=(flame.material===mats.ghost?1:1.7)*pulse;flame.position.y+=Math.sin(elapsed*1.7+(flame.userData.phase||0))*.0007;}
   for(const motes of floatingMotes){motes.rotation.y=elapsed*.008;const a=motes.geometry.attributes.position;for(let i=1;i<a.array.length;i+=3){a.array[i]+=.06*dt;if(a.array[i]>8)a.array[i]=.2;}a.needsUpdate=true;}
+  if(lifeGroup.visible){
+    for(const bird of birds){const u=bird.userData,a=elapsed*(.12+u.flock*.012)+u.phase;bird.position.x=Math.cos(a)*u.radius;bird.position.z=Math.sin(a)*u.radius;bird.rotation.y=-a;const flap=Math.sin(elapsed*7+u.phase)*.48;u.left.rotation.z=.18+flap;u.right.rotation.z=-.18-flap;}
+    for(const cloud of clouds){cloud.position.x+=cloud.userData.speed*dt;if(cloud.position.x>48)cloud.position.x=-48;}
+    for(const b of butterflies){const u=b.userData,t=elapsed*1.4+u.phase;b.position.x=u.origin.x+Math.sin(t)*.8;b.position.z=u.origin.z+Math.cos(t*.73)*.65;b.position.y=u.origin.y+Math.sin(t*2.1)*.16;const flap=Math.sin(t*9)*.85;u.left.rotation.z=flap;u.right.rotation.z=-flap;}
+    for(const o of terrainGroup.children)if(o.userData.wind!=null)o.rotation.z=Math.sin(elapsed*.75+o.userData.wind)*.025;
+    const weatherWave=Math.max(0,Math.sin(elapsed*.055-1.2)),rainStrength=Math.max(0,(weatherWave-.72)/.28);rain.material.opacity=rainStrength*.58;sun.intensity=theme.atmosphere.sunIntensity*1.35*(1-rainStrength*.35);
+    const ra=rain.geometry.attributes.position;for(let i=1;i<ra.array.length;i+=3){ra.array[i]-=(8+rainStrength*12)*dt;if(ra.array[i]<0)ra.array[i]=16;}ra.needsUpdate=true;
+  }
   for(const p of [...effectsGroup.children]){p.userData.life-=dt;p.position.addScaledVector(p.userData.velocity,dt);p.userData.velocity.y-=3.2*dt;p.rotation.x+=dt*5;p.rotation.z+=dt*3;p.material.transparent=true;p.material.opacity=Math.max(0,p.userData.life);if(p.userData.life<=0)effectsGroup.remove(p);}
   if(keeper.visible&&state.keeperPath.length){const cell=state.keeperPath[0],target=new THREE.Vector3((cell.x+.5)*CELL,.08,(cell.z+.5)*CELL),delta=target.clone().sub(keeper.position);if(delta.length()<.08)state.keeperPath.shift();else{keeper.rotation.y=Math.atan2(delta.x,delta.z);keeper.position.addScaledVector(delta.normalize(),Math.min(2.4*dt,delta.length()));}}
   if(state.mode==='build'){
