@@ -6,6 +6,7 @@ const CELL = 2, WALL_H = 2.8, WALL_T = .24;
 const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
 const state = { rooms: [], selected: null, mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1 };
+const preferences = { quality: 'high', volume: 70, speed: 100, reduceMotion: false };
 const keys = new Set();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -125,6 +126,29 @@ function updateSelection() {
 function updateHUD(){document.querySelector('#roomCount').textContent=state.rooms.length;const n=state.rooms.reduce((s,r)=>s+r.w*r.d,0);document.querySelector('#tileCount').textContent=`${n} tile${n===1?'':'s'}`;}
 function toast(msg){const e=document.querySelector('#toast');e.textContent=msg;e.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove('show'),1800);}
 
+function applyPreferences() {
+  renderer.setPixelRatio(preferences.quality==='high'?Math.min(devicePixelRatio,2):preferences.quality==='medium'?Math.min(devicePixelRatio,1.35):1);
+  renderer.shadowMap.enabled=preferences.quality!=='low';
+  sun.castShadow=preferences.quality==='high';
+  document.body.classList.toggle('reduce-motion',preferences.reduceMotion);
+  document.querySelector('#qualitySetting').value=preferences.quality;
+  document.querySelector('#volumeSetting').value=preferences.volume;
+  document.querySelector('#speedSetting').value=preferences.speed;
+  document.querySelector('#motionSetting').checked=preferences.reduceMotion;
+}
+function readPreferences() {
+  try { Object.assign(preferences,JSON.parse(localStorage.getItem('stonekeep-settings')||'{}')); } catch {}
+  applyPreferences();
+}
+function savePreferences() {
+  preferences.quality=document.querySelector('#qualitySetting').value;
+  preferences.volume=Number(document.querySelector('#volumeSetting').value);
+  preferences.speed=Number(document.querySelector('#speedSetting').value);
+  preferences.reduceMotion=document.querySelector('#motionSetting').checked;
+  localStorage.setItem('stonekeep-settings',JSON.stringify(preferences));applyPreferences();
+  document.querySelector('#settings').classList.add('hidden');toast('Settings applied');
+}
+
 function pointerCell(e) {
   const rect=renderer.domElement.getBoundingClientRect(); mouse.x=((e.clientX-rect.left)/rect.width)*2-1; mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
   raycaster.setFromCamera(mouse,buildCamera); const p=new THREE.Vector3(); if(!raycaster.ray.intersectPlane(plane,p))return null;
@@ -172,16 +196,53 @@ function setMode(mode){
   if(mode==='build'&&document.pointerLockElement)document.exitPointerLock();
   toast(mode==='build'?'Build mode':'Explore mode — click to look');
 }
+
+const tutorialSteps = [
+  { target:'.topbar', kicker:'WELCOME, ARCHITECT', title:'Your keep begins here.', body:'This guided tour follows the real interface. Build and Explore are your two main modes; you can revisit this tutorial anytime with the ? button.' },
+  { target:'.palette', kicker:'STEP ONE · CONSTRUCTION', title:'Choose what to build.', body:'The construction palette holds modular room and corridor tools. Stone Room is selected, so you are ready to draw a chamber.' },
+  { target:null, kicker:'STEP TWO · PLACE A ROOM', title:'Drag across the grid.', body:'Hold the left mouse button and drag over empty tiles. A green preview is valid; red means the footprint overlaps another room or is too large.' },
+  { target:'.palette', kicker:'STEP THREE · EDIT', title:'Select, rotate, demolish.', body:'Click a finished room to select it. Use Rotate or press R to turn its footprint. Use Demolish or Delete to remove it.' },
+  { target:'.mode-switch', kicker:'STEP FOUR · EXPLORE', title:'Walk what you build.', body:'Choose Explore after placing a room. Click the 3D view, look with the mouse, and move with WASD. Press B to return to Build mode.' },
+  { target:'.actions', kicker:'STEP FIVE · KEEP YOUR WORK', title:'Save and restore.', body:'Save stores the current layout in this browser. Load rebuilds every floor, wall, doorway, torch, and prop from compact room data.' },
+  { target:'.inspector', kicker:'TOUR COMPLETE', title:'Raise your Stone Keep.', body:'The ledger tracks rooms and floor area. Start with two touching rooms—the shared wall automatically becomes an opening. Your dungeon is ready.' }
+];
+let tutorialIndex=0;
+function showTutorialStep(index) {
+  tutorialIndex=Math.max(0,Math.min(tutorialSteps.length-1,index));
+  document.querySelectorAll('.tutorial-focus').forEach(e=>e.classList.remove('tutorial-focus'));
+  const step=tutorialSteps[tutorialIndex],target=step.target?document.querySelector(step.target):null;if(target)target.classList.add('tutorial-focus');
+  document.querySelector('#tutorialStepLabel').textContent=`STEP ${tutorialIndex+1} OF ${tutorialSteps.length}`;
+  document.querySelector('#tutorialProgress').style.width=`${((tutorialIndex+1)/tutorialSteps.length)*100}%`;
+  document.querySelector('#tutorialKicker').textContent=step.kicker;document.querySelector('#tutorialTitle').textContent=step.title;document.querySelector('#tutorialBody').textContent=step.body;
+  document.querySelector('#tutorialBack').disabled=tutorialIndex===0;
+  document.querySelector('#tutorialNext').textContent=tutorialIndex===tutorialSteps.length-1?'START BUILDING':'NEXT';
+}
+function startTutorial() {
+  document.querySelector('#mainMenu').classList.add('hidden');document.querySelector('#help').classList.add('hidden');document.querySelector('#settings').classList.add('hidden');document.querySelector('#tutorial').classList.remove('hidden');setMode('build');showTutorialStep(0);
+}
+function endTutorial() {
+  document.querySelector('#tutorial').classList.add('hidden');document.querySelectorAll('.tutorial-focus').forEach(e=>e.classList.remove('tutorial-focus'));localStorage.setItem('stonekeep-tutorial-complete','true');toast('Tutorial complete — begin building');
+}
+function startNewDungeon() {
+  state.rooms=[];state.selected=null;state.nextId=1;buildWorld();document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('A new keep awaits');
+}
 document.querySelector('#buildMode').onclick=()=>setMode('build');document.querySelector('#exploreMode').onclick=()=>setMode('explore');
 document.querySelector('#deleteBtn').onclick=deleteSelected;document.querySelector('#rotateBtn').onclick=rotateSelected;document.querySelector('#saveBtn').onclick=save;document.querySelector('#loadBtn').onclick=load;
-const help=document.querySelector('#help');document.querySelector('#helpBtn').onclick=()=>help.classList.remove('hidden');document.querySelector('#closeHelp').onclick=document.querySelector('#beginBtn').onclick=()=>help.classList.add('hidden');
+const help=document.querySelector('#help'),settings=document.querySelector('#settings');
+document.querySelector('#helpBtn').onclick=()=>help.classList.remove('hidden');document.querySelector('#closeHelp').onclick=()=>help.classList.add('hidden');document.querySelector('#startTutorialFromHelp').onclick=startTutorial;
+document.querySelector('#newGameBtn').onclick=startNewDungeon;document.querySelector('#tutorialBtn').onclick=startTutorial;
+const continueBtn=document.querySelector('#continueBtn');continueBtn.disabled=!localStorage.getItem('stonekeep-save');continueBtn.onclick=()=>{load();document.querySelector('#mainMenu').classList.add('hidden');setMode('build');};
+function openSettings(){settings.classList.remove('hidden');applyPreferences();}
+document.querySelector('#settingsBtn').onclick=openSettings;document.querySelector('#menuSettingsBtn').onclick=openSettings;document.querySelector('#closeSettings').onclick=()=>settings.classList.add('hidden');document.querySelector('#applySettings').onclick=savePreferences;
+document.querySelector('#resetSettings').onclick=()=>{Object.assign(preferences,{quality:'high',volume:70,speed:100,reduceMotion:false});applyPreferences();};
+document.querySelector('#tutorialExit').onclick=endTutorial;document.querySelector('#tutorialBack').onclick=()=>showTutorialStep(tutorialIndex-1);document.querySelector('#tutorialNext').onclick=()=>tutorialIndex===tutorialSteps.length-1?endTutorial():showTutorialStep(tutorialIndex+1);
 addEventListener('keydown',e=>{keys.add(e.code);if(e.code==='Delete')deleteSelected();if(e.code==='KeyR'&&state.mode==='build')rotateSelected();if(e.code==='KeyB')setMode('build');if((e.ctrlKey||e.metaKey)&&e.code==='KeyS'){e.preventDefault();save();}});
 addEventListener('keyup',e=>keys.delete(e.code));
 addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);for(const c of [buildCamera,exploreCamera]){c.aspect=innerWidth/innerHeight;c.updateProjectionMatrix();}});
 
 const clock=new THREE.Clock();
 function tick(){
-  const dt=Math.min(clock.getDelta(),.04),speed=state.mode==='build'?12:4;
+  const dt=Math.min(clock.getDelta(),.04),speed=(state.mode==='build'?12:4)*(preferences.speed/100);
   if(state.mode==='build'){
     const forward=new THREE.Vector3(-Math.sin(cam.yaw),0,-Math.cos(cam.yaw)),right=new THREE.Vector3(forward.z,0,-forward.x),move=new THREE.Vector3();
     if(keys.has('KeyW')||keys.has('ArrowUp'))move.add(forward);if(keys.has('KeyS')||keys.has('ArrowDown'))move.sub(forward);if(keys.has('KeyD')||keys.has('ArrowRight'))move.add(right);if(keys.has('KeyA')||keys.has('ArrowLeft'))move.sub(right);
@@ -195,4 +256,4 @@ function tick(){
   }
   renderer.render(scene,camera);requestAnimationFrame(tick);
 }
-buildWorld();tick();
+readPreferences();buildWorld();tick();

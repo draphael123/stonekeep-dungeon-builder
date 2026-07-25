@@ -17,6 +17,7 @@
       <div class="actions">
         <button id="saveBtn" title="Save (Ctrl+S)">SAVE</button>
         <button id="loadBtn">LOAD</button>
+        <button id="settingsBtn" title="Settings">⚙</button>
         <button id="helpBtn">?</button>
       </div>
     </header>
@@ -44,6 +45,43 @@
       <span id="hint">LMB DRAG Place room · RMB DRAG Rotate view · WASD/ARROWS Pan · WHEEL Zoom</span>
       <span><i class="valid-dot"></i> VALID &nbsp; <i class="invalid-dot"></i> BLOCKED</span>
     </footer>
+    <div id="mainMenu" class="main-menu">
+      <div class="menu-vignette"></div>
+      <div class="menu-content">
+        <div class="menu-crest">⌂</div>
+        <p class="eyebrow">A DUNGEON ARCHITECT EXPERIENCE</p>
+        <h1>STONEKEEP</h1>
+        <p class="menu-subtitle">Raise chambers from the dark. Shape every passage.<br />Walk the halls you create.</p>
+        <div class="menu-actions">
+          <button id="newGameBtn" class="menu-primary">NEW DUNGEON <span>›</span></button>
+          <button id="continueBtn">CONTINUE <span>›</span></button>
+          <button id="tutorialBtn">GUIDED TUTORIAL <span>›</span></button>
+          <button id="menuSettingsBtn">SETTINGS <span>›</span></button>
+        </div>
+        <small class="version">VERTICAL SLICE · v0.2</small>
+      </div>
+    </div>
+    <div id="settings" class="modal hidden">
+      <div class="modal-card settings-card">
+        <button id="closeSettings">×</button>
+        <p class="eyebrow">GAME OPTIONS</p>
+        <h2>Settings</h2>
+        <label><span>Graphics quality<small>Adjust shadows and rendering detail</small></span><select id="qualitySetting"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+        <label><span>Master volume<small>Interface and ambience volume</small></span><input id="volumeSetting" type="range" min="0" max="100" value="70" /></label>
+        <label><span>Camera speed<small>Build and exploration movement speed</small></span><input id="speedSetting" type="range" min="50" max="150" value="100" /></label>
+        <label class="check-row"><span>Reduce motion<small>Disables animated interface transitions</small></span><input id="motionSetting" type="checkbox" /></label>
+        <div class="settings-actions"><button id="resetSettings">RESET DEFAULTS</button><button id="applySettings" class="primary">APPLY</button></div>
+      </div>
+    </div>
+    <div id="tutorial" class="tutorial hidden">
+      <div id="tutorialPanel" class="tutorial-panel">
+        <div class="tutorial-progress"><span id="tutorialStepLabel">STEP 1 OF 7</span><div><i id="tutorialProgress"></i></div></div>
+        <p id="tutorialKicker" class="eyebrow">WELCOME, ARCHITECT</p>
+        <h2 id="tutorialTitle">Your keep begins here.</h2>
+        <p id="tutorialBody">This short guided tour introduces every tool you need to build and explore a dungeon.</p>
+        <div class="tutorial-actions"><button id="tutorialExit">EXIT</button><button id="tutorialBack">BACK</button><button id="tutorialNext" class="primary">NEXT</button></div>
+      </div>
+    </div>
     <div id="help" class="modal hidden">
       <div class="modal-card">
         <button id="closeHelp">×</button>
@@ -55,7 +93,7 @@
           <div><b>Navigate</b><p>Right-drag to orbit, wheel to zoom, and use WASD or arrows to pan the build camera.</p></div>
           <div><b>Explore</b><p>Enter Explore, click the view, then use WASD and the mouse. Escape releases the pointer.</p></div>
         </div>
-        <button id="beginBtn" class="primary">BEGIN BUILDING</button>
+        <button id="startTutorialFromHelp" class="primary">START GUIDED TUTORIAL</button>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>

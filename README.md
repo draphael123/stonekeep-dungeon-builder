@@ -44,6 +44,9 @@ For a production build, run `npm run build`, then `npm run preview`.
 - Data-driven Stone Keep theme with dark masonry, warm torches, atmospheric fog, stone variation, wall caps, and metal torch props
 - Local browser save/load of the dungeon layout
 - Responsive in-game construction palette, ledger, help, and control hints
+- Launch menu with new-dungeon, continue, tutorial, and settings options
+- Seven-step guided tutorial that highlights and explains the live build controls
+- Persistent graphics quality, master volume, camera speed, and reduced-motion settings
 
 ## Architecture
 
