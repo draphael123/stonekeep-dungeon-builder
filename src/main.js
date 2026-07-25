@@ -357,7 +357,7 @@ function setMode(mode){
   document.querySelector('#buildMode').classList.toggle('active',mode==='build');document.querySelector('#exploreMode').classList.toggle('active',mode==='explore');
   document.querySelector('.palette').style.display=mode==='build'?'block':'none';document.querySelector('.inspector').style.display=mode==='build'?'block':'none';document.querySelector('#crosshair').style.display=mode==='explore'?'block':'none';
   document.querySelector('#hint').textContent=mode==='build'?'LMB DRAG Place room · RMB DRAG Rotate view · WASD/ARROWS Pan · WHEEL Zoom':'CLICK Capture mouse · WASD Move · MOUSE Look · ESC Release · B Return to build';
-  if(mode==='explore'&&state.rooms.length){const r=state.rooms[0];exploreCamera.position.set((r.x+.5)*CELL,1.65,(r.z+.5)*CELL);}
+  if(mode==='explore'&&state.rooms.length){const r=state.rooms.find(x=>x.id===state.selected)||state.rooms[0];exploreCamera.position.set((r.x+r.w/2)*CELL,1.65,(r.z+r.d/2)*CELL);exploreYaw=r.d>=r.w?Math.PI:Math.PI/2;explorePitch=-.04;}
   if(mode==='build'&&document.pointerLockElement)document.exitPointerLock();
   world.traverse(o=>{if(o.userData.ceiling)o.visible=mode==='explore';});
   toast(mode==='build'?'Build mode':'Explore mode — click to look');
