@@ -5,7 +5,7 @@ import { THEMES, makeThemeMaterials } from './themes.js';
 const CELL = 2, WALL_H = 2.8, WALL_T = .24;
 const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
-const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'unassigned', mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:500, food:100, timeScale:1, simTime:0, simAccumulator:0 };
+const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'hall', layer:'surface', mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:500, food:100, timeScale:1, simTime:0, simAccumulator:0 };
 const ROOM_TYPES={
   unassigned:{name:'Unassigned Chamber',cost:5,purpose:'A flexible chamber with no production. Assign its purpose later.',needs:'No furnishing requirement'},
   treasury:{name:'Treasury',cost:6,purpose:'Stores more gold and generates income while operational.',needs:'Requires a chest or gold pile'},
@@ -22,6 +22,14 @@ const ROOM_TYPES={
   alchemy:{name:'Alchemy Laboratory',cost:8,purpose:'Prepared to brew potions and volatile defenses.',needs:'Requires a cauldron or table'},
   shrine:{name:'Dark Shrine',cost:8,purpose:'Prepared to generate influence and magical power.',needs:'Requires a statue or brazier'},
   throne:{name:'Throne Room',cost:10,purpose:'A ceremonial seat of power that anchors the keep.',needs:'Requires a banner'}
+  ,hall:{name:'Great Hall',cost:8,purpose:'The civic center of the settlement and the first step toward a castle.',needs:'Settlement headquarters'}
+  ,cottage:{name:'Cottage',cost:5,purpose:'Provides a warm home for residents and their families.',needs:'Houses two residents'}
+  ,forge:{name:'Forge',cost:8,purpose:'Turns raw materials into tools, fittings, and future weapons.',needs:'Requires a blacksmith'}
+  ,farm:{name:'Farm Plot',cost:3,purpose:'Produces food outdoors and supports settlement growth.',needs:'Requires a farmer'}
+  ,storehouse:{name:'Storehouse',cost:5,purpose:'Raises material capacity and shortens hauling routes.',needs:'Requires a worker'}
+  ,lumberyard:{name:'Lumber Yard',cost:4,purpose:'Processes timber for buildings, furniture, and defenses.',needs:'Requires a woodcutter'}
+  ,road:{name:'Road',cost:1,purpose:'Connects buildings and prepares faster outdoor travel.',needs:'No worker required'}
+  ,watchtower:{name:'Watchtower',cost:9,purpose:'Extends sight and protects the settlement boundary.',needs:'Requires a guard'}
 };
 const preferences = { quality: 'high', volume: 70, brightness: 125, fog: 55, torch: 110, gridOpacity: 60, fov: 68, speed: 100, sensitivity: 100, showGrid: true, invertLook: false, autosave: true, reduceMotion: false };
 const keys = new Set();
@@ -45,8 +53,8 @@ sun.position.set(-18, 28, 14); sun.intensity*=1.35;sun.castShadow = true; sun.sh
 sun.shadow.camera.left = sun.shadow.camera.bottom = -35; sun.shadow.camera.right = sun.shadow.camera.top = 35;
 scene.add(sun);
 
-const world = new THREE.Group(), previewGroup = new THREE.Group(), selectionGroup = new THREE.Group(), atmosphereGroup=new THREE.Group(), effectsGroup=new THREE.Group();
-scene.add(world, previewGroup, selectionGroup, atmosphereGroup, effectsGroup);
+const world = new THREE.Group(), previewGroup = new THREE.Group(), selectionGroup = new THREE.Group(), atmosphereGroup=new THREE.Group(), effectsGroup=new THREE.Group(), terrainGroup=new THREE.Group();
+scene.add(world, previewGroup, selectionGroup, atmosphereGroup, effectsGroup,terrainGroup);
 
 const grid = new THREE.GridHelper(80, 40, 0x86754f, 0x353b38);
 grid.position.y = .012; grid.material.transparent = true; grid.material.opacity = .6; scene.add(grid);
@@ -96,7 +104,7 @@ function roomCells(room) {
   const out=[]; for(let x=room.x;x<room.x+room.w;x++) for(let z=room.z;z<room.z+room.d;z++) out.push({x,z}); return out;
 }
 function occupiedMap(ignoreId=null) {
-  const map=new Map(); for(const room of state.rooms) if(room.id!==ignoreId) for(const c of roomCells(room)) map.set(cellKey(c.x,c.z),room.id); return map;
+  const map=new Map(); for(const room of state.rooms) if(room.id!==ignoreId&&(room.layer||'underground')===state.layer) for(const c of roomCells(room)) map.set(cellKey(c.x,c.z),room.id); return map;
 }
 function normalizeRect(a,b){return {x:Math.min(a.x,b.x),z:Math.min(a.z,b.z),w:Math.abs(a.x-b.x)+1,d:Math.abs(a.z-b.z)+1};}
 function isValidRect(r,ignoreId=null){ if(r.w>12||r.d>12) return false; const occ=occupiedMap(ignoreId); return roomCells(r).every(c=>!occ.has(cellKey(c.x,c.z))); }
@@ -104,6 +112,11 @@ function isValidRect(r,ignoreId=null){ if(r.w>12||r.d>12) return false; const oc
 function addBox(group, size, pos, material, cast=true) {
   const m=new THREE.Mesh(new THREE.BoxGeometry(...size), material); m.position.set(...pos); m.castShadow=cast; m.receiveShadow=true; group.add(m); return m;
 }
+function buildSurfaceTerrain(){
+  terrainGroup.clear();for(let i=0;i<34;i++){const angle=i*2.399,radius=25+(i%7)*2.2,x=Math.cos(angle)*radius,z=Math.sin(angle)*radius;addCylinder(terrainGroup,.17,2.2,[x,1.05,z],mats.wood,8);const crown=new THREE.Mesh(new THREE.ConeGeometry(.85+(i%3)*.18,2.3,8),mats.moss);crown.position.set(x,2.65,z);crown.castShadow=true;terrainGroup.add(crown);}
+  for(let i=0;i<18;i++){const angle=i*1.73,radius=15+(i%5)*3,rock=addBox(terrainGroup,[.28+(i%3)*.12,.2+(i%2)*.1,.3+(i%4)*.1],[Math.cos(angle)*radius,.08,Math.sin(angle)*radius],mats.wallTop);rock.rotation.y=i*.58;}
+}
+buildSurfaceTerrain();
 function makeTorch(group,x,z,side) {
   const offsets={n:[0,0,-.17],s:[0,0,.17],w:[-.17,0,0],e:[.17,0,0]};
   const [ox,,oz]=offsets[side]; const holder=addBox(group,[.08,.45,.08],[x+ox,1.38,z+oz],mats.trim);
@@ -131,10 +144,29 @@ function addCeiling(group,room){
   for(let i=0;i<=bays;i++){const t=i/bays-.5;const beam=addBox(cg,alongX?[.16,.28,room.d*CELL-.25]:[room.w*CELL-.25,.28,.16],[alongX?cx+t*(room.w*CELL-.35):cx,WALL_H+.38,alongX?cz:cz+t*(room.d*CELL-.35)],mats.wood);beam.rotation[alongX?'z':'x']=0;}
   cg.visible=state.mode==='explore';group.add(cg);
 }
+function addSurfaceBuilding(group,room){
+  const cx=(room.x+room.w/2)*CELL,cz=(room.z+room.d/2)*CELL,w=room.w*CELL-.18,d=room.d*CELL-.18;
+  if(room.role==='road'){addBox(group,[w,.08,d],[cx,.02,cz],mats.wallTop,false);return;}
+  if(room.role==='farm'){
+    addBox(group,[w,.07,d],[cx,.01,cz],mats.wood,false);for(let z=room.z+.35;z<room.z+room.d;z+=.55)for(let x=room.x+.3;x<room.x+room.w;x+=.5)addCylinder(group,.035,.28,[x*CELL,.18,z*CELL],mats.moss,5);return;
+  }
+  if(room.role==='lumberyard'){addBox(group,[w,.1,d],[cx,.03,cz],mats.moss,false);for(let i=0;i<8;i++){const log=addCylinder(group,.16,1.4,[cx+(i%4-.5)*.42,.2,cz+(Math.floor(i/4)-.5)*.55],mats.wood,9);log.rotation.z=Math.PI/2;}return;}
+  addBox(group,[w,.16,d],[cx,.03,cz],mats.floor);
+  const wallH=room.role==='watchtower'?4.2:2.35;
+  const wallMat=room.role==='forge'?mats.wall:mats.wood;
+  addBox(group,[w,wallH,.18],[cx,wallH/2,room.z*CELL+.1],wallMat);addBox(group,[.18,wallH,d],[room.x*CELL+.1,wallH/2,cz],wallMat);addBox(group,[.18,wallH,d],[(room.x+room.w)*CELL-.1,wallH/2,cz],wallMat);
+  const doorway=1.35,sideW=Math.max(.3,(w-doorway)/2);addBox(group,[sideW,wallH,.18],[cx-(doorway+sideW)/2,wallH/2,(room.z+room.d)*CELL-.1],wallMat);addBox(group,[sideW,wallH,.18],[cx+(doorway+sideW)/2,wallH/2,(room.z+room.d)*CELL-.1],wallMat);addBox(group,[doorway,.48,.18],[cx,wallH-.24,(room.z+room.d)*CELL-.1],wallMat);
+  const roof=new THREE.Group();roof.userData.surfaceRoof=true;const roofMat=room.role==='hall'?mats.banner:mats.rug;
+  const left=addBox(roof,[w*.58,.16,d+.35],[cx-w*.22,wallH+.38,cz],roofMat);left.rotation.z=.52;const right=addBox(roof,[w*.58,.16,d+.35],[cx+w*.22,wallH+.38,cz],roofMat);right.rotation.z=-.52;
+  roof.visible=state.mode==='explore';group.add(roof);
+  if(room.role==='forge'){const chimney=addBox(group,[.48,wallH+1,.48],[cx+w*.28,(wallH+1)/2,cz+d*.25],mats.wallTop);const glow=new THREE.PointLight(0xff7428,4,10,2);glow.userData.baseIntensity=4;glow.position.set(cx,1,cz);group.add(glow);}
+  if(room.role==='storehouse')for(let i=0;i<4;i++)addBox(group,[.65,.65,.65],[cx+(i%2-.5)*.8,.42,cz+(Math.floor(i/2)-.5)*.8],mats.wood);
+  if(room.role==='watchtower'){const top=addBox(group,[w+.5,.22,d+.5],[cx,wallH+.05,cz],mats.wallTop);for(const [x,z] of [[cx-w/2,cz-d/2],[cx+w/2,cz-d/2],[cx-w/2,cz+d/2],[cx+w/2,cz+d/2]])addBox(group,[.35,.7,.35],[x,wallH+.45,z],mats.wall);}
+}
 function addCylinder(group,r,depth,pos,material,segments=10){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,depth,segments),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;
 }
-const ROLE_REQUIREMENTS={treasury:['chest','goldpile'],barracks:['cot','bedroll'],guard:['weaponrack'],library:['bookshelf'],kitchen:['cauldron'],workshop:['table','crate'],crypt:['statue'],prison:['cage'],infirmary:['cot'],tavern:['table','bench'],training:['weaponrack'],alchemy:['cauldron','table'],shrine:['statue','brazier'],throne:['banner'],heart:[]};
+const ROLE_REQUIREMENTS={treasury:['chest','goldpile'],barracks:['cot','bedroll'],guard:['weaponrack'],library:['bookshelf'],kitchen:['cauldron'],workshop:['table','crate'],crypt:['statue'],prison:['cage'],infirmary:['cot'],tavern:['table','bench'],training:['weaponrack'],alchemy:['cauldron','table'],shrine:['statue','brazier'],throne:['banner'],heart:[],hall:[],cottage:[],forge:[],farm:[],storehouse:[],lumberyard:[],road:[],watchtower:[]};
 function roomOperational(room){
   if(!room.role||room.role==='unassigned')return false;if(room.condition==='battle'||room.condition==='abandoned')return false;
   const types=new Set(state.decorations.filter(d=>d.roomId===room.id).map(d=>d.type));return (ROLE_REQUIREMENTS[room.role]||[]).some(t=>types.has(t))||(ROLE_REQUIREMENTS[room.role]||[]).length===0;
@@ -221,8 +253,9 @@ function addPlacedDecoration(group,decor) {
 function buildWorld() {
   world.clear();animatedFlames.length=0;
   const occ=occupiedMap();
-  for(const room of state.rooms) {
+  for(const room of state.rooms.filter(r=>(r.layer||'underground')===state.layer)) {
     const g=new THREE.Group(); g.userData.roomId=room.id; world.add(g);
+    if(state.layer==='surface'){addSurfaceBuilding(g,room);continue;}
     for(const c of roomCells(room)) {
       const px=(c.x+.5)*CELL,pz=(c.z+.5)*CELL;
       addBox(g,[CELL-.07,.16,CELL-.07],[px,.02,pz],((c.x+c.z)&1)?mats.floor:mats.floorAlt);
@@ -254,7 +287,7 @@ function buildWorld() {
     }
     addRoomProps(g,room);addConditionProps(g,room);addCeiling(g,room);
   }
-  for(const decor of state.decorations){
+  for(const decor of state.decorations.filter(d=>{const r=state.rooms.find(x=>x.id===d.roomId);return(r?.layer||'underground')===state.layer;})){
     const dg=new THREE.Group();dg.userData.roomId=decor.roomId;dg.userData.decorId=decor.id;world.add(dg);addPlacedDecoration(dg,decor);
   }
   updateSelection();
@@ -287,12 +320,12 @@ function updateSelection() {
   const roomType=r?(r.role==='heart'?{name:'Dungeon Heart',purpose:'The indestructible source of your keep.'}:ROOM_TYPES[r.role||'unassigned']):null;
   document.querySelector('#selectionInfo').textContent=d?`${d.type[0].toUpperCase()+d.type.slice(1)} · ${Math.round((d.rotation||0)*180/Math.PI)%360}° · ${Math.round((d.scale||1)*100)}%`:r?`${roomType.name} · ${r.w} × ${r.d} tiles${r.role&&r.role!=='unassigned'?` · ${roomOperational(r)?'Operational':'Inactive'}`:''}. ${roomType.purpose}`:'Choose a room purpose, then drag across the grid.';
   const conditionSelect=document.querySelector('#conditionSelect');conditionSelect.disabled=!r||!!d;if(r)conditionSelect.value=r.condition||'occupied';
-  const roleSelect=document.querySelector('#roleSelect');roleSelect.disabled=!r||!!d||r?.role==='heart';if(r)roleSelect.value=r.role||'unassigned';
-  document.querySelector('#dressRoomBtn').disabled=!r||!!d||r?.role==='heart';
-  document.querySelector('#doorBtn').disabled=!r||!!d;document.querySelector('#pathTestBtn').disabled=!r||!!d;
+  const roleSelect=document.querySelector('#roleSelect');roleSelect.disabled=!r||!!d||r?.role==='heart'||state.layer==='surface';if(r&&ROOM_TYPES[r.role])roleSelect.value=r.role||'unassigned';
+  document.querySelector('#dressRoomBtn').disabled=!r||!!d||r?.role==='heart'||state.layer==='surface';
+  document.querySelector('#doorBtn').disabled=!r||!!d||state.layer==='surface';document.querySelector('#pathTestBtn').disabled=!r||!!d;
   document.querySelector('#doorBtn span:nth-child(2)').textContent=r?.doorsOpen===false?'Open room doors':'Close room doors';
 }
-function updateHUD(){document.querySelector('#roomCount').textContent=state.rooms.length;const n=state.rooms.reduce((s,r)=>s+r.w*r.d,0);document.querySelector('#tileCount').textContent=`${n} tile${n===1?'':'s'}`;document.querySelector('#decorCount').textContent=state.decorations.length;document.querySelector('#operationalCount').textContent=state.rooms.filter(roomOperational).length;updateSimHUD();}
+function updateHUD(){const activeRooms=state.rooms.filter(r=>(r.layer||'underground')===state.layer);document.querySelector('#roomCount').textContent=activeRooms.length;const n=activeRooms.reduce((s,r)=>s+r.w*r.d,0);document.querySelector('#tileCount').textContent=`${n} tile${n===1?'':'s'}`;document.querySelector('#decorCount').textContent=state.decorations.filter(d=>activeRooms.some(r=>r.id===d.roomId)).length;document.querySelector('#operationalCount').textContent=activeRooms.filter(roomOperational).length;updateSimHUD();}
 function updateSimHUD(){
   document.querySelector('#goldValue').textContent=Math.floor(state.gold);document.querySelector('#foodValue').textContent=Math.floor(state.food);document.querySelector('#workerValue').textContent=workers.length;
   const alert=state.food<20?'Food stores are critically low.':state.gold<40?'The treasury cannot fund construction.':state.rooms.some(r=>r.role&&r.role!=='unassigned'&&!roomOperational(r))?'A functional room needs furnishings or repairs.':state.rooms.length<3?'Expand the keep and assign its first rooms.':'The keep is stable and operating.';
@@ -399,7 +432,7 @@ renderer.domElement.addEventListener('pointerup',e=>{
   if(e.button===2){rightDrag=false;return}
   if(e.button===0&&state.mode==='build'&&state.dragStart){
     const r=normalizeRect(state.dragStart,state.dragEnd);
-    if(state.previewValid){const type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost;if(state.gold<cost){toast(`Need ${cost} gold to build this ${type.name.toLowerCase()}`);}else{state.gold-=cost;r.id=state.nextId++;r.condition='occupied';r.role=state.buildRole;r.doorsOpen=true;state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();constructionBurst(r);if(preferences.autosave)save(true);toast(`${type.name} raised · ${cost} gold`);}}
+    if(state.previewValid){const type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost;if(state.gold<cost){toast(`Need ${cost} gold to build this ${type.name.toLowerCase()}`);}else{state.gold-=cost;r.id=state.nextId++;r.condition='occupied';r.role=state.buildRole;r.layer=state.layer;r.doorsOpen=true;state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();constructionBurst(r);if(preferences.autosave)save(true);toast(`${type.name} raised · ${cost} gold`);}}
     else {state.selected=pickRoom(e);updateSelection();if(!state.selected){const type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost;toast(isValidRect(r)&&state.gold<cost?`Need ${cost} gold for this ${type.name.toLowerCase()}`:'Blocked — choose empty ground');}}
     state.dragStart=state.dragEnd=null;previewGroup.clear();
   }
@@ -410,8 +443,8 @@ renderer.domElement.addEventListener('wheel',e=>{if(state.mode==='build'){cam.di
 function editDecor(mutator,message){const d=state.decorations.find(x=>x.id===state.selectedDecor);if(!d)return;mutator(d);buildWorld();if(preferences.autosave)save(true);toast(message);}
 function deleteSelected(){if(state.selectedDecor!=null){state.decorations=state.decorations.filter(d=>d.id!==state.selectedDecor);state.selectedDecor=null;buildWorld();if(preferences.autosave)save(true);toast('Decoration removed');return;}if(!state.selected)return;const room=state.rooms.find(r=>r.id===state.selected);if(room?.role==='heart'){toast('The dungeon heart cannot be demolished');return;}state.gold+=Math.floor((room?.w||0)*(room?.d||0)*2.5);state.rooms=state.rooms.filter(r=>r.id!==state.selected);state.decorations=state.decorations.filter(d=>d.roomId!==state.selected);state.selected=null;buildWorld();if(preferences.autosave)save(true);toast('Room demolished · partial refund');}
 function rotateSelected(){if(state.selectedDecor!=null){editDecor(d=>d.rotation=(d.rotation||0)+Math.PI/2,'Decoration rotated');return;}const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;const nr={...r,w:r.d,d:r.w};nr.x=Math.round(r.x+(r.w-nr.w)/2);nr.z=Math.round(r.z+(r.d-nr.d)/2);if(isValidRect(nr,r.id)){Object.assign(r,nr);buildWorld();if(preferences.autosave)save(true);toast('Room rotated');}else toast('Rotation blocked');}
-function save(silent=false){localStorage.setItem('stonekeep-save',JSON.stringify({version:3,theme:theme.id,rooms:state.rooms,decorations:state.decorations,nextId:state.nextId,nextDecorId:state.nextDecorId,gold:state.gold,food:state.food}));if(!silent)toast('Dungeon saved locally');}
-function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved dungeon found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.decorations=data.decorations||[];state.nextId=data.nextId||1;state.nextDecorId=data.nextDecorId||1;state.gold=data.gold??500;state.food=data.food??100;state.selected=null;state.selectedDecor=null;state.showcase=false;selectTool('room');buildWorld();spawnWorkers();toast('Dungeon restored');}catch{toast('Save data could not be read');}}
+function save(silent=false){localStorage.setItem('stonekeep-save',JSON.stringify({version:4,theme:theme.id,rooms:state.rooms,decorations:state.decorations,nextId:state.nextId,nextDecorId:state.nextDecorId,gold:state.gold,food:state.food,activeLayer:state.layer}));if(!silent)toast('Stronghold saved locally');}
+function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved stronghold found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.decorations=data.decorations||[];state.nextId=data.nextId||1;state.nextDecorId=data.nextDecorId||1;state.gold=data.gold??500;state.food=data.food??100;state.layer=data.activeLayer||(state.rooms.some(r=>r.layer==='surface')?'surface':'underground');state.selected=null;state.selectedDecor=null;state.showcase=false;setLayer(state.layer);spawnWorkers();toast('Stronghold restored');}catch{toast('Save data could not be read');}}
 
 function setMode(mode){
   state.mode=mode;camera=mode==='build'?buildCamera:exploreCamera;grid.visible=mode==='build'&&preferences.showGrid;selectionGroup.visible=mode==='build';previewGroup.clear();
@@ -421,7 +454,17 @@ function setMode(mode){
   if(mode==='explore'&&state.rooms.length){const r=state.rooms.find(x=>x.id===state.selected)||state.rooms[0];exploreCamera.position.set((r.x+r.w/2)*CELL,1.65,(r.z+r.d/2)*CELL);exploreYaw=r.d>=r.w?Math.PI:Math.PI/2;explorePitch=-.04;}
   if(mode==='build'&&document.pointerLockElement)document.exitPointerLock();
   world.traverse(o=>{if(o.userData.ceiling)o.visible=mode==='explore';});
+  world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=mode==='explore';});
   toast(mode==='build'?'Build mode':'Explore mode — click to look');
+}
+function setLayer(layer){
+  state.layer=layer;state.selected=state.rooms.find(r=>(r.layer||'underground')===layer)?.id||null;state.selectedDecor=null;state.keeperPath=[];
+  document.querySelector('#surfaceLayer').classList.toggle('active',layer==='surface');document.querySelector('#undergroundLayer').classList.toggle('active',layer==='underground');
+  document.querySelector('#surfaceBlueprints').classList.toggle('hidden',layer!=='surface');document.querySelector('#undergroundBlueprints').classList.toggle('hidden',layer!=='underground');
+  ground.material.color.set(layer==='surface'?0x334330:0x252c29);scene.background.set(layer==='surface'?0x78908a:theme.atmosphere.background);scene.fog.color.set(layer==='surface'?0x71827b:theme.atmosphere.fogColor);
+  workers.forEach(w=>w.visible=layer==='surface'&&state.rooms.some(r=>r.layer==='surface'));
+  terrainGroup.visible=layer==='surface';
+  selectRoomType(layer==='surface'?'cottage':'unassigned');buildWorld();toast(layer==='surface'?'Surface stronghold':'Underground works');
 }
 
 function addDecorToRoom(room,type,rx,rz,rotation=0,scale=1,variant=0){
@@ -442,7 +485,7 @@ function assignWorkerTask(worker){
   const u=worker.userData,operational=state.rooms.filter(roomOperational);let target=null,task='Patrolling';
   if(u.hunger<65){target=operational.find(r=>r.role==='kitchen');task='Fetching a meal';}
   if(!target&&u.rest<55){target=operational.find(r=>r.role==='barracks');task='Going to rest';}
-  if(!target){const workRooms=operational.filter(r=>['treasury','kitchen','workshop','guard'].includes(r.role));target=workRooms[(Math.floor(state.simTime/5)+u.index)%Math.max(1,workRooms.length)];task=target?`Working in ${target.role}`:'Waiting for an operational room';}
+  if(!target){const workRooms=operational.filter(r=>['treasury','kitchen','workshop','guard','hall','forge','farm','storehouse','lumberyard','watchtower'].includes(r.role)&&(r.layer||'underground')===state.layer);target=workRooms[(Math.floor(state.simTime/5)+u.index)%Math.max(1,workRooms.length)];task=target?`Working in ${target.role}`:'Waiting for an operational room';}
   if(!target)return;const start={x:Math.floor(worker.position.x/CELL),z:Math.floor(worker.position.z/CELL)},goal=roomCenterCell(target),path=findPath(start,goal);if(path.length){u.path=path.slice(1);u.targetRoom=target.id;u.task=task;}
 }
 function updateWorker(worker,dt){
@@ -451,8 +494,8 @@ function updateWorker(worker,dt){
   const cell=u.path[0],target=new THREE.Vector3((cell.x+.5)*CELL,.08,(cell.z+.5)*CELL),delta=target.clone().sub(worker.position);if(delta.length()<.07)u.path.shift();else{worker.rotation.y=Math.atan2(delta.x,delta.z);worker.position.addScaledVector(delta.normalize(),Math.min(1.75*dt,delta.length()));worker.position.y=.08+Math.abs(Math.sin(state.simTime*7+u.index))*.035;}
 }
 function simulateStep(){
-  const operational=state.rooms.filter(roomOperational),treasuries=operational.filter(r=>r.role==='treasury').length,kitchens=operational.filter(r=>r.role==='kitchen').length;
-  const capacity=500+treasuries*500;state.gold=Math.min(capacity,state.gold+treasuries*1.5);state.food=Math.min(300+kitchens*200,state.food+kitchens*.65);
+  const operational=state.rooms.filter(roomOperational),treasuries=operational.filter(r=>r.role==='treasury').length,kitchens=operational.filter(r=>r.role==='kitchen').length,farms=operational.filter(r=>r.role==='farm').length,stores=operational.filter(r=>r.role==='storehouse').length,forges=operational.filter(r=>r.role==='forge').length;
+  const capacity=500+treasuries*500+stores*250;state.gold=Math.min(capacity,state.gold+treasuries*1.5+forges*.35);state.food=Math.min(300+kitchens*200+farms*150,state.food+kitchens*.65+farms*.85);
   updateSimHUD();
 }
 function sendKeeper(){
@@ -527,7 +570,7 @@ function endTutorial() {
   document.querySelector('#tutorial').classList.add('hidden');document.querySelectorAll('.tutorial-focus').forEach(e=>e.classList.remove('tutorial-focus'));localStorage.setItem('stonekeep-tutorial-complete','true');toast('Tutorial complete — begin building');
 }
 function startNewDungeon() {
-  state.rooms=[{id:1,x:-2,z:-2,w:4,d:4,condition:'pristine',role:'heart',doorsOpen:true,preset:'heart'}];state.decorations=[];state.selected=1;state.selectedDecor=null;state.nextId=2;state.nextDecorId=1;state.gold=500;state.food=100;state.timeScale=1;state.simTime=0;state.showcase=false;selectRoomType('unassigned');buildWorld();spawnWorkers();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('The dungeon heart awakens');
+  state.rooms=[{id:1,x:-3,z:-2,w:6,d:4,condition:'pristine',role:'hall',layer:'surface',doorsOpen:true},{id:2,x:-2,z:-2,w:4,d:4,condition:'pristine',role:'heart',layer:'underground',doorsOpen:true,preset:'heart'}];state.decorations=[];state.selected=1;state.selectedDecor=null;state.nextId=3;state.nextDecorId=1;state.gold=500;state.food=100;state.timeScale=1;state.simTime=0;state.showcase=false;state.layer='surface';setLayer('surface');spawnWorkers();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('Your outpost has been founded');
 }
 function selectTool(tool){
   state.tool=tool;document.querySelectorAll('.room-type').forEach(b=>b.classList.toggle('active',tool==='room'&&b.dataset.roomRole===state.buildRole));document.querySelectorAll('.decor-tool').forEach(b=>b.classList.toggle('active',b.dataset.decor===tool));
@@ -537,6 +580,7 @@ function selectRoomType(role){
   state.buildRole=role;selectTool('room');const type=ROOM_TYPES[role],panel=document.querySelector('#buildPurpose');panel.querySelector('b').textContent=type.name.toUpperCase();panel.querySelector('span').textContent=`${type.cost} gold per tile · ${type.needs}`;panel.querySelector('p').textContent=type.purpose;
 }
 document.querySelector('#buildMode').onclick=()=>setMode('build');document.querySelector('#exploreMode').onclick=()=>setMode('explore');
+document.querySelector('#surfaceLayer').onclick=()=>setLayer('surface');document.querySelector('#undergroundLayer').onclick=()=>setLayer('underground');
 document.querySelector('#deleteBtn').onclick=deleteSelected;document.querySelector('#rotateBtn').onclick=rotateSelected;document.querySelector('#saveBtn').onclick=save;document.querySelector('#loadBtn').onclick=load;
 document.querySelector('#rotateFineBtn').onclick=()=>editDecor(d=>d.rotation=(d.rotation||0)+Math.PI/12,'Turned 15°');
 document.querySelector('#scaleDownBtn').onclick=()=>editDecor(d=>d.scale=Math.max(.65,(d.scale||1)-.1),'Decoration resized');
@@ -586,9 +630,9 @@ function tick(){
 }
 readPreferences();
 state.rooms=[
-  {id:1,x:-4,z:-3,w:4,d:4},
-  {id:2,x:0,z:-2,w:3,d:2},
-  {id:3,x:-3,z:1,w:3,d:3},
-  {id:4,x:3,z:-2,w:2,d:4}
+  {id:1,x:-4,z:-3,w:5,d:4,role:'hall',layer:'surface',condition:'pristine'},
+  {id:2,x:2,z:-2,w:3,d:3,role:'forge',layer:'surface',condition:'occupied'},
+  {id:3,x:-4,z:2,w:3,d:2,role:'cottage',layer:'surface',condition:'occupied'},
+  {id:4,x:1,z:2,w:5,d:3,role:'farm',layer:'surface',condition:'occupied'}
 ];state.nextId=5;cam.target.set(0,0,-1);cam.distance=27;cam.yaw=.82;cam.pitch=.66;updateBuildCamera();
 buildWorld();grid.visible=false;tick();
