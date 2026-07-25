@@ -51,6 +51,18 @@
         <button id="duplicateBtn" title="Duplicate selected decoration">DUPLICATE</button>
       </div>
       <button id="deleteBtn" class="tool compact danger"><span class="tool-icon">×</span><span>Demolish</span><kbd>Del</kbd></button>
+      <div class="divider"></div>
+      <p class="eyebrow">ROOM DRESSING</p>
+      <select id="conditionSelect" class="keep-select" aria-label="Selected room condition">
+        <option value="occupied">Occupied</option>
+        <option value="pristine">Pristine</option>
+        <option value="abandoned">Abandoned</option>
+        <option value="battle">Battle-damaged</option>
+        <option value="overgrown">Overgrown</option>
+        <option value="haunted">Haunted</option>
+      </select>
+      <button id="dressRoomBtn" class="tool compact"><span class="tool-icon">✦</span><span>Auto-dress room</span></button>
+      <button id="heroRoomBtn" class="tool compact hero-tool"><span class="tool-icon">♜</span><span>Build throne hall<small>Hero room preset</small></span></button>
       <div class="theme-card">
         <span class="swatch"></span><div><small>ACTIVE THEME</small><strong>Stone Keep</strong></div>
       </div>
@@ -124,6 +136,7 @@
           <div><b>Build</b><p>Drag the left mouse button over empty tiles. Adjacent chambers automatically receive connecting doorways.</p></div>
           <div><b>Inspect</b><p>Click a room to select it. Press R to rotate its footprint, or Delete to remove it.</p></div>
           <div><b>Decorate</b><p>Place a decoration, return to the Stone Room tool, then click it to rotate, resize, vary, duplicate, or remove it.</p></div>
+          <div><b>Dress rooms</b><p>Select a room, choose its condition, then auto-dress it. The throne-hall preset creates a cinematic hero chamber.</p></div>
           <div><b>Navigate</b><p>Right-drag to orbit, wheel to zoom, and use WASD or arrows to pan the build camera.</p></div>
           <div><b>Explore</b><p>Enter Explore, click the view, then use WASD and the mouse. Escape releases the pointer.</p></div>
         </div>
