@@ -393,12 +393,14 @@ function constructionBurst(room){
   for(let i=0;i<24;i++){const material=(i%4?mats.wallTop:mats.flame).clone();material.transparent=true;const p=new THREE.Mesh(new THREE.BoxGeometry(.06,.06,.06),material);p.position.set(cx+(Math.random()-.5)*room.w*CELL,.15,cz+(Math.random()-.5)*room.d*CELL);p.userData.velocity=new THREE.Vector3((Math.random()-.5)*1.6,.7+Math.random()*1.8,(Math.random()-.5)*1.6);p.userData.life=.65+Math.random()*.55;effectsGroup.add(p);}
 }
 function updatePreview() {
-  previewGroup.clear(); if(!state.dragStart||!state.dragEnd)return;
+  previewGroup.clear();const badge=document.querySelector('#placementBadge');if(!state.dragStart||!state.dragEnd){badge.classList.add('hidden');return;}
   const r=normalizeRect(state.dragStart,state.dragEnd),type=ROOM_TYPES[state.buildRole],cost=buildCost(type,r.w*r.d),minValid=state.buildRole!=='hall'||(r.w>=3&&r.d>=3); state.previewValid=isValidRect(r)&&state.gold>=cost&&minValid;
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(r.w*CELL-.08,.14,r.d*CELL-.08),state.previewValid?mats.previewValid:mats.previewInvalid);
   mesh.position.set((r.x+r.w/2)*CELL,.18,(r.z+r.d/2)*CELL); previewGroup.add(mesh);
   const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:state.previewValid?0x8ff0bc:0xff7a6b}));
   edges.position.copy(mesh.position); previewGroup.add(edges);
+  const outdoor=['road','cobble','boardwalk','farm','fence','well','market','orchard','lumberyard'].includes(state.buildRole);if(!outdoor){const ghost=new THREE.Mesh(new THREE.BoxGeometry(r.w*CELL-.28,2.1,r.d*CELL-.28),new THREE.MeshBasicMaterial({color:state.previewValid?0x63c99a:0xd5685b,wireframe:true,transparent:true,opacity:.34}));ghost.position.set((r.x+r.w/2)*CELL,1.15,(r.z+r.d/2)*CELL);previewGroup.add(ghost);}
+  badge.classList.remove('hidden');badge.classList.toggle('invalid',!state.previewValid);badge.style.left=`${Math.min(innerWidth-190,lastPointer.x)}px`;badge.style.top=`${Math.min(innerHeight-110,lastPointer.y)}px`;document.querySelector('#placementName').textContent=type.name;document.querySelector('#placementDetails').textContent=`${r.w} × ${r.d} tiles · ${cost} gold`;document.querySelector('#placementStatus').textContent=state.previewValid?'VALID PLACEMENT':state.gold<cost?'NOT ENOUGH GOLD':!minValid?'MINIMUM 3 × 3':'PLACEMENT BLOCKED';
   document.querySelector('#buildPurpose span').textContent=`${cost} gold total · ${Math.ceil(type.cost*difficulty().cost)} per tile${state.gold<cost?' · INSUFFICIENT GOLD':''}`;
 }
 function updateSelection() {
@@ -532,6 +534,7 @@ renderer.domElement.addEventListener('pointerdown',e=>{
 renderer.domElement.addEventListener('pointermove',e=>{
   if(state.mode==='explore'&&document.pointerLockElement===renderer.domElement){const sensitivity=preferences.sensitivity/100;exploreYaw-=e.movementX*.0022*sensitivity;explorePitch=Math.max(-1.35,Math.min(1.35,explorePitch+(preferences.invertLook?1:-1)*e.movementY*.0022*sensitivity));return}
   if(rightDrag){const sensitivity=preferences.sensitivity/100;cam.yaw-=(e.clientX-lastPointer.x)*.008*sensitivity;cam.pitch=Math.max(.28,Math.min(1.35,cam.pitch+(e.clientY-lastPointer.y)*.006*sensitivity));lastPointer={x:e.clientX,y:e.clientY};updateBuildCamera();return}
+  lastPointer={x:e.clientX,y:e.clientY};
   if(state.dragStart){const c=pointerCell(e);if(c){state.dragEnd=c;updatePreview();}}
 });
 renderer.domElement.addEventListener('pointerup',e=>{
@@ -541,7 +544,7 @@ renderer.domElement.addEventListener('pointerup',e=>{
     const r=normalizeRect(state.dragStart,state.dragEnd);
     if(state.previewValid){const type=ROOM_TYPES[state.buildRole],cost=buildCost(type,r.w*r.d);if(state.gold<cost){toast(`Need ${cost} gold to build this ${type.name.toLowerCase()}`);}else{state.gold-=cost;r.id=state.nextId++;r.condition='occupied';r.role=state.buildRole;r.layer=state.layer;r.doorsOpen=true;state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();if(r.role==='hall'&&r.layer==='surface')spawnWorkers();constructionBurst(r);if(preferences.autosave)save(true);toast(`${type.name} raised · ${cost} gold`);}}
     else {state.selected=pickRoom(e);updateSelection();if(!state.selected){const type=ROOM_TYPES[state.buildRole],cost=buildCost(type,r.w*r.d);toast(isValidRect(r)&&state.gold<cost?`Need ${cost} gold for this ${type.name.toLowerCase()}`:'Blocked — choose empty ground');}}
-    state.dragStart=state.dragEnd=null;previewGroup.clear();
+    state.dragStart=state.dragEnd=null;previewGroup.clear();document.querySelector('#placementBadge').classList.add('hidden');
   }
 });
 renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
