@@ -206,7 +206,15 @@ function addSurfaceBuilding(group,room){
     for(let z=room.z+.3;z<room.z+room.d;z+=.52)for(let x=room.x+.28;x<room.x+room.w;x+=.52){const crop=addCylinder(group,.04,.3,[x*CELL,.23,z*CELL],cropMaterial,5);crop.rotation.z=((x+z)%2-.5)*.12;}
     for(let x=room.x*CELL+.1;x<(room.x+room.w)*CELL;x+=1.5){addBox(group,[.09,.55,.09],[x,.28,room.z*CELL+.1],mats.wood);addBox(group,[.09,.55,.09],[x,.28,(room.z+room.d)*CELL-.1],mats.wood);}return;
   }
-  if(room.role==='fence'){const alongX=room.w>=room.d,len=alongX?w:d;for(let i=-len/2;i<=len/2;i+=1.45)addBox(group,[.1,.9,.1],[alongX?cx+i:cx,.45,alongX?cz:cz+i],mats.wood);addBox(group,alongX?[len,.12,.1]:[.1,.12,len],[cx,.62,cz],mats.wood);addBox(group,alongX?[len,.1,.1]:[.1,.1,len],[cx,.32,cz],mats.wood);return;}
+  if(room.role==='fence'){
+    const occ=occupiedMap(),isFence=(x,z)=>state.rooms.find(r=>r.id===occ.get(cellKey(x,z)))?.role==='fence';
+    for(const cell of roomCells(room)){const px=(cell.x+.5)*CELL,pz=(cell.z+.5)*CELL,links=[[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dz])=>isFence(cell.x+dx,cell.z+dz));
+      addBox(group,[.13,1,.13],[px,.5,pz],mats.wood);
+      for(const [dx,dz] of links)if(dx>0||dz>0){for(const y of [.34,.68])addBox(group,dx?[CELL,.11,.1]:[.1,.11,CELL],[px+dx*CELL/2,y,pz+dz*CELL/2],mats.wood);}
+      if(!links.length){const alongX=room.w>=room.d;for(const y of [.34,.68])addBox(group,alongX?[CELL,.11,.1]:[.1,.11,CELL],[px,y,pz],mats.wood);for(const off of [-1,1])addBox(group,[.13,1,.13],[px+(alongX?off*CELL/2:0),.5,pz+(alongX?0:off*CELL/2)],mats.wood);}
+      if(links.length===1){const [dx,dz]=links[0];for(const y of [.34,.68])addBox(group,dx?[CELL/2,.11,.1]:[.1,.11,CELL/2],[px-dx*CELL/4,y,pz-dz*CELL/4],mats.wood);addBox(group,[.13,1,.13],[px-dx*CELL/2,.5,pz-dz*CELL/2],mats.wood);}
+    }return;
+  }
   if(room.role==='well'){addCylinder(group,Math.min(w,d)*.28,.55,[cx,.28,cz],mats.wallTop,16);const opening=addCylinder(group,Math.min(w,d)*.19,.04,[cx,.58,cz],mats.soot,16);for(const x of [-.55,.55])addBox(group,[.12,1.8,.12],[cx+x,.9,cz],mats.wood);addBox(group,[1.35,.12,.12],[cx,1.7,cz],mats.wood);const roof=addBox(group,[1.7,.1,1.05],[cx,1.9,cz],mats.rug);roof.rotation.z=.08;return;}
   if(room.role==='market'){addBox(group,[w,.07,d],[cx,.015,cz],roadMaterial,false);for(const x of [-w*.35,w*.35])for(const z of [-d*.32,d*.32])addBox(group,[.1,1.8,.1],[cx+x,.9,cz+z],mats.wood);const awning=addBox(group,[w*.85,.1,d*.82],[cx,1.82,cz],canvasMaterial);awning.rotation.z=.05;addBox(group,[w*.72,.55,.48],[cx,.45,cz],mats.wood);for(let i=0;i<5;i++)addBox(group,[.18,.12,.18],[cx+(i-2)*.28,.8,cz],i%2?cropMaterial:mats.brass);return;}
   if(room.role==='orchard'){addBox(group,[w,.06,d],[cx,.01,cz],mats.moss,false);for(let x=room.x+.5;x<room.x+room.w;x+=1.15)for(let z=room.z+.5;z<room.z+room.d;z+=1.15){addCylinder(group,.11,1.15,[x*CELL,.58,z*CELL],mats.wood,8);const crown=new THREE.Mesh(new THREE.SphereGeometry(.5,9,7),cropMaterial);crown.position.set(x*CELL,1.35,z*CELL);crown.castShadow=true;group.add(crown);for(let i=0;i<3;i++){const fruit=new THREE.Mesh(new THREE.SphereGeometry(.055,6,4),mats.banner);fruit.position.set(x*CELL+(i-1)*.2,1.3+(i%2)*.18,z*CELL-.38);group.add(fruit);}}return;}
