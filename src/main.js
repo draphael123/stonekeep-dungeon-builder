@@ -5,7 +5,7 @@ import { THEMES, makeThemeMaterials } from './themes.js';
 const CELL = 2, WALL_H = 2.8, WALL_T = .24;
 const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
-const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'hall', layer:'surface', mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:500, food:100, timeScale:1, simTime:0, simAccumulator:0 };
+const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'cottage', layer:'surface', mode: 'build', progressionTier:1, dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:180, food:60, timeScale:1, simTime:0, simAccumulator:0 };
 const ROOM_TYPES={
   unassigned:{name:'Unassigned Chamber',cost:5,purpose:'A flexible chamber with no production. Assign its purpose later.',needs:'No furnishing requirement'},
   treasury:{name:'Treasury',cost:6,purpose:'Stores more gold and generates income while operational.',needs:'Requires a chest or gold pile'},
@@ -292,6 +292,22 @@ function buildWorld() {
   }
   updateSelection();
   updateHUD();
+  updateProgression();
+}
+function getProgression(){
+  const surface=state.rooms.filter(r=>r.layer==='surface'),roles=new Set(surface.map(r=>r.role));let tier=1,goal='Build a cottage and a farm',reward='Unlocks lumber yard and storehouse',done=(roles.has('cottage')?1:0)+(roles.has('farm')?1:0),total=2;
+  if(roles.has('cottage')&&roles.has('farm')){tier=2;goal='Build a lumber yard and storehouse';reward='Unlocks the forge';done=(roles.has('lumberyard')?1:0)+(roles.has('storehouse')?1:0);}
+  if(roles.has('lumberyard')&&roles.has('storehouse')){tier=3;goal='Build a forge and grow to 6 buildings';reward='Unlocks underground building and decorations';done=Math.min(2,(roles.has('forge')?1:0)+(surface.length>=6?1:0));}
+  if(roles.has('forge')&&surface.length>=6){tier=4;goal='Build a watchtower';reward='Your village becomes a fortified keep';done=roles.has('watchtower')?1:0;total=1;}
+  if(roles.has('watchtower')){tier=5;goal='Expand freely above and below';reward='All current blueprints unlocked';done=1;total=1;}
+  return{tier,goal,reward,done,total,names:['','I · FOUNDING CAMP','II · HAMLET','III · VILLAGE','IV · STRONGHOLD','V · STONE KEEP']};
+}
+function updateProgression(){
+  if(state.showcase)return;const p=getProgression(),old=state.progressionTier||1;state.progressionTier=p.tier;document.body.dataset.tier=p.tier;
+  document.querySelector('#stageName').textContent=p.names[p.tier];document.querySelector('#stageCount').textContent=`${p.done} / ${p.total}`;document.querySelector('#stageProgress').style.width=`${Math.round(p.done/p.total*100)}%`;document.querySelector('#nextGoal').textContent=p.goal;document.querySelector('#unlockReward').textContent=p.reward;
+  document.querySelectorAll('[data-tier]').forEach(b=>{const locked=Number(b.dataset.tier)>p.tier;b.disabled=locked;b.classList.toggle('locked',locked);b.title=locked?`Unlocks at settlement stage ${b.dataset.tier}`:'';});
+  const locked=p.tier<4;document.querySelector('#undergroundLayer').disabled=locked;document.querySelector('#undergroundLock').textContent=locked?'LOCKED':'OPEN';
+  if(p.tier>old)toast(`${p.names[p.tier]} reached · new buildings unlocked`);
 }
 function constructionBurst(room){
   if(preferences.reduceMotion)return;const cx=(room.x+room.w/2)*CELL,cz=(room.z+room.d/2)*CELL;
@@ -443,7 +459,7 @@ renderer.domElement.addEventListener('wheel',e=>{if(state.mode==='build'){cam.di
 function editDecor(mutator,message){const d=state.decorations.find(x=>x.id===state.selectedDecor);if(!d)return;mutator(d);buildWorld();if(preferences.autosave)save(true);toast(message);}
 function deleteSelected(){if(state.selectedDecor!=null){state.decorations=state.decorations.filter(d=>d.id!==state.selectedDecor);state.selectedDecor=null;buildWorld();if(preferences.autosave)save(true);toast('Decoration removed');return;}if(!state.selected)return;const room=state.rooms.find(r=>r.id===state.selected);if(room?.role==='heart'){toast('The dungeon heart cannot be demolished');return;}state.gold+=Math.floor((room?.w||0)*(room?.d||0)*2.5);state.rooms=state.rooms.filter(r=>r.id!==state.selected);state.decorations=state.decorations.filter(d=>d.roomId!==state.selected);state.selected=null;buildWorld();if(preferences.autosave)save(true);toast('Room demolished · partial refund');}
 function rotateSelected(){if(state.selectedDecor!=null){editDecor(d=>d.rotation=(d.rotation||0)+Math.PI/2,'Decoration rotated');return;}const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;const nr={...r,w:r.d,d:r.w};nr.x=Math.round(r.x+(r.w-nr.w)/2);nr.z=Math.round(r.z+(r.d-nr.d)/2);if(isValidRect(nr,r.id)){Object.assign(r,nr);buildWorld();if(preferences.autosave)save(true);toast('Room rotated');}else toast('Rotation blocked');}
-function save(silent=false){localStorage.setItem('stonekeep-save',JSON.stringify({version:4,theme:theme.id,rooms:state.rooms,decorations:state.decorations,nextId:state.nextId,nextDecorId:state.nextDecorId,gold:state.gold,food:state.food,activeLayer:state.layer}));if(!silent)toast('Stronghold saved locally');}
+function save(silent=false){localStorage.setItem('stonekeep-save',JSON.stringify({version:5,theme:theme.id,rooms:state.rooms,decorations:state.decorations,nextId:state.nextId,nextDecorId:state.nextDecorId,gold:state.gold,food:state.food,activeLayer:state.layer,progressionTier:state.progressionTier}));if(!silent)toast('Stronghold saved locally');}
 function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved stronghold found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.decorations=data.decorations||[];state.nextId=data.nextId||1;state.nextDecorId=data.nextDecorId||1;state.gold=data.gold??500;state.food=data.food??100;state.layer=data.activeLayer||(state.rooms.some(r=>r.layer==='surface')?'surface':'underground');state.selected=null;state.selectedDecor=null;state.showcase=false;setLayer(state.layer);spawnWorkers();toast('Stronghold restored');}catch{toast('Save data could not be read');}}
 
 function setMode(mode){
@@ -458,6 +474,8 @@ function setMode(mode){
   toast(mode==='build'?'Build mode':'Explore mode — click to look');
 }
 function setLayer(layer){
+  if(layer==='underground'&&getProgression().tier<4){toast('Grow to a village before excavating underground');return;}
+  if(layer==='underground'&&!state.rooms.some(r=>(r.layer||'underground')==='underground')){state.rooms.push({id:state.nextId++,x:-2,z:-2,w:4,d:4,condition:'pristine',role:'heart',layer:'underground',doorsOpen:true,preset:'heart'});toast('The first underground chamber has been excavated');}
   state.layer=layer;state.selected=state.rooms.find(r=>(r.layer||'underground')===layer)?.id||null;state.selectedDecor=null;state.keeperPath=[];
   document.querySelector('#surfaceLayer').classList.toggle('active',layer==='surface');document.querySelector('#undergroundLayer').classList.toggle('active',layer==='underground');
   document.querySelector('#surfaceBlueprints').classList.toggle('hidden',layer!=='surface');document.querySelector('#undergroundBlueprints').classList.toggle('hidden',layer!=='underground');
@@ -543,12 +561,12 @@ function buildHeroRoom(){
 
 const tutorialSteps = [
   { target:'.topbar', kicker:'WELCOME, ARCHITECT', title:'Your keep begins here.', body:'This guided tour follows the real interface. Build and Explore are your two main modes; you can revisit this tutorial anytime with the ? button.' },
-  { target:'.palette', kicker:'STEP ONE · CONSTRUCTION', title:'Choose a room purpose.', body:'Each room type explains its job, cost, and required furnishings. Choose one before dragging its footprint on the grid.' },
+  { target:'.inspector', kicker:'STEP ONE · GROWTH', title:'Follow one clear goal.', body:'Your settlement begins as a small camp. Complete the goal in the Growth panel to unlock the next useful buildings. The underground opens later.' },
   { target:null, kicker:'STEP TWO · PLACE A ROOM', title:'Drag across the grid.', body:'Hold the left mouse button and drag over empty tiles. A green preview is valid; red means the footprint overlaps another room or is too large.' },
   { target:'.palette', kicker:'STEP THREE · EDIT', title:'Select, rotate, demolish.', body:'Click a finished room to select it. Use Rotate or press R to turn its footprint. Use Demolish or Delete to remove it.' },
   { target:'.mode-switch', kicker:'STEP FOUR · EXPLORE', title:'Walk what you build.', body:'Choose Explore after placing a room. Click the 3D view, look with the mouse, and move with WASD. Press B to return to Build mode.' },
   { target:'.actions', kicker:'STEP FIVE · KEEP YOUR WORK', title:'Save and restore.', body:'Save stores the current layout in this browser. Load rebuilds every floor, wall, doorway, torch, and prop from compact room data.' },
-  { target:'.inspector', kicker:'TOUR COMPLETE', title:'Raise your Stone Keep.', body:'The ledger tracks rooms and floor area. Start with two touching rooms—the shared wall automatically becomes an opening. Your dungeon is ready.' }
+  { target:'.inspector', kicker:'TOUR COMPLETE', title:'Grow from camp to castle.', body:'Start with a cottage and farm. New workshops, defenses, decorations, and underground construction appear only when your settlement is ready for them.' }
 ];
 let tutorialIndex=0;
 function showTutorialStep(index) {
@@ -570,7 +588,7 @@ function endTutorial() {
   document.querySelector('#tutorial').classList.add('hidden');document.querySelectorAll('.tutorial-focus').forEach(e=>e.classList.remove('tutorial-focus'));localStorage.setItem('stonekeep-tutorial-complete','true');toast('Tutorial complete — begin building');
 }
 function startNewDungeon() {
-  state.rooms=[{id:1,x:-3,z:-2,w:6,d:4,condition:'pristine',role:'hall',layer:'surface',doorsOpen:true},{id:2,x:-2,z:-2,w:4,d:4,condition:'pristine',role:'heart',layer:'underground',doorsOpen:true,preset:'heart'}];state.decorations=[];state.selected=1;state.selectedDecor=null;state.nextId=3;state.nextDecorId=1;state.gold=500;state.food=100;state.timeScale=1;state.simTime=0;state.showcase=false;state.layer='surface';setLayer('surface');spawnWorkers();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('Your outpost has been founded');
+  state.rooms=[{id:1,x:-2,z:-2,w:4,d:3,condition:'pristine',role:'hall',layer:'surface',doorsOpen:true}];state.decorations=[];state.selected=1;state.selectedDecor=null;state.nextId=2;state.nextDecorId=1;state.gold=180;state.food=60;state.progressionTier=1;state.timeScale=1;state.simTime=0;state.showcase=false;state.layer='surface';setLayer('surface');spawnWorkers();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');selectRoomType('cottage');cam.distance=23;updateBuildCamera();toast('A small camp awaits · build a cottage and farm');
 }
 function selectTool(tool){
   state.tool=tool;document.querySelectorAll('.room-type').forEach(b=>b.classList.toggle('active',tool==='room'&&b.dataset.roomRole===state.buildRole));document.querySelectorAll('.decor-tool').forEach(b=>b.classList.toggle('active',b.dataset.decor===tool));
@@ -597,7 +615,7 @@ document.querySelector('#pauseTime').onclick=()=>setTimeScale(0);document.queryS
 const help=document.querySelector('#help'),settings=document.querySelector('#settings');
 document.querySelector('#helpBtn').onclick=()=>help.classList.remove('hidden');document.querySelector('#closeHelp').onclick=()=>help.classList.add('hidden');document.querySelector('#startTutorialFromHelp').onclick=startTutorial;
 document.querySelector('#newGameBtn').onclick=startNewDungeon;document.querySelector('#tutorialBtn').onclick=startTutorial;
-document.querySelectorAll('.room-type').forEach(b=>b.onclick=()=>selectRoomType(b.dataset.roomRole));document.querySelectorAll('.decor-tool').forEach(b=>b.onclick=()=>selectTool(b.dataset.decor));
+document.querySelectorAll('.room-type').forEach(b=>b.onclick=()=>{if(!b.disabled)selectRoomType(b.dataset.roomRole);});document.querySelectorAll('.decor-tool').forEach(b=>b.onclick=()=>selectTool(b.dataset.decor));
 const continueBtn=document.querySelector('#continueBtn');continueBtn.disabled=!localStorage.getItem('stonekeep-save');continueBtn.onclick=()=>{load();document.body.classList.remove('menu-open');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');};
 function openSettings(){settings.classList.remove('hidden');applyPreferences();}
 document.querySelector('#settingsBtn').onclick=openSettings;document.querySelector('#menuSettingsBtn').onclick=openSettings;document.querySelector('#closeSettings').onclick=()=>settings.classList.add('hidden');document.querySelector('#applySettings').onclick=savePreferences;
