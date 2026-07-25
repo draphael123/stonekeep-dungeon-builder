@@ -5,7 +5,7 @@ import { THEMES, makeThemeMaterials } from './themes.js';
 const CELL = 2, WALL_H = 2.8, WALL_T = .24;
 const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
-const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true };
+const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:500, food:100, timeScale:1, simTime:0, simAccumulator:0 };
 const preferences = { quality: 'high', volume: 70, brightness: 125, fog: 55, torch: 110, gridOpacity: 60, fov: 68, speed: 100, sensitivity: 100, showGrid: true, invertLook: false, autosave: true, reduceMotion: false };
 const keys = new Set();
 
@@ -46,6 +46,13 @@ const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
 const plane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
 let rightDrag = false, lastPointer = {x:0,y:0}, toastTimer;
 const animatedFlames=[],floatingMotes=[];
+const keeper=new THREE.Group();const keeperBody=addCylinder(keeper,.22,.82,[0,.52,0],mats.leather,10);const keeperHead=new THREE.Mesh(new THREE.SphereGeometry(.18,10,8),mats.brass);keeperHead.position.y=1.02;keeper.add(keeperHead);const keeperLight=new THREE.PointLight(0xffa34d,1.8,5,2);keeperLight.position.y=1.25;keeper.add(keeperLight);keeper.visible=false;scene.add(keeper);
+const workers=[];
+function makeWorker(index){
+  const g=new THREE.Group(),body=addCylinder(g,.18,.65,[0,.43,0],index?mats.wood:mats.leather,9),head=new THREE.Mesh(new THREE.SphereGeometry(.14,9,7),mats.wallTop);head.position.y=.87;g.add(head);
+  const pack=addBox(g,[.3,.33,.16],[0,.55,.18],mats.wood);g.userData={hunger:100,rest:100,morale:100,path:[],task:'Idle',index};g.visible=false;scene.add(g);workers.push(g);return g;
+}
+makeWorker(0);makeWorker(1);
 
 function buildAtmosphere(){
   atmosphereGroup.clear();floatingMotes.length=0;
@@ -110,6 +117,11 @@ function addCeiling(group,room){
 function addCylinder(group,r,depth,pos,material,segments=10){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,depth,segments),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;
 }
+const ROLE_REQUIREMENTS={treasury:['chest','goldpile'],barracks:['cot','bedroll'],guard:['weaponrack'],library:['bookshelf'],kitchen:['cauldron'],workshop:['table','crate'],crypt:['statue'],prison:['cage'],throne:['banner'],heart:[]};
+function roomOperational(room){
+  if(!room.role||room.role==='unassigned')return false;if(room.condition==='battle'||room.condition==='abandoned')return false;
+  const types=new Set(state.decorations.filter(d=>d.roomId===room.id).map(d=>d.type));return (ROLE_REQUIREMENTS[room.role]||[]).some(t=>types.has(t))||(ROLE_REQUIREMENTS[room.role]||[]).length===0;
+}
 function addRoomProps(group,room) {
   const cx=(room.x+room.w/2)*CELL,cz=(room.z+room.d/2)*CELL,min=Math.min(room.w,room.d);
   const roomFill=new THREE.PointLight(0xe59a58,2.05,Math.max(room.w,room.d)*CELL*1.5,2);roomFill.userData.baseIntensity=2.05;roomFill.position.set(cx,2.25,cz);group.add(roomFill);
@@ -142,6 +154,13 @@ function addRoomProps(group,room) {
     for(const dx of [-.58,.58])addCylinder(group,.11,1.9,[cx+dx,1.34,(room.z+room.d-.55)*CELL],mats.brass,8);
     const crown=new THREE.PointLight(0xffc36a,3.8,10,2);crown.userData.baseIntensity=3.8;crown.position.set(cx,2.4,(room.z+room.d-1)*CELL);group.add(crown);
   }
+  if(room.role&&room.role!=='unassigned'){
+    const operational=roomOperational(room),ring=new THREE.Mesh(new THREE.RingGeometry(.38,.5,24),new THREE.MeshBasicMaterial({color:operational?0x68c998:0xbe684d,transparent:true,opacity:.7,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.set(cx,.19,cz);group.add(ring);
+  }
+  if(room.role==='heart'){
+    const core=new THREE.Mesh(new THREE.OctahedronGeometry(.62,0),mats.ghost);core.position.set(cx,1.15,cz);core.userData.phase=room.id;group.add(core);animatedFlames.push(core);
+    addCylinder(group,.9,.26,[cx,.25,cz],mats.brass,10);const heartLight=new THREE.PointLight(0x55bec5,4.8,13,2);heartLight.userData.baseIntensity=4.8;heartLight.position.set(cx,1.5,cz);group.add(heartLight);
+  }
 }
 function addPlacedDecoration(group,decor) {
   const x=(decor.x+.5)*CELL,z=(decor.z+.5)*CELL,rot=decor.rotation||0;
@@ -172,6 +191,14 @@ function addPlacedDecoration(group,decor) {
     addCylinder(group,.72,.09,[0,.05,0],mats.trim,12);addCylinder(group,.72,.09,[0,1.55,0],mats.trim,12);for(let i=0;i<10;i++){const a=i*Math.PI/5;addCylinder(group,.035,1.5,[Math.cos(a)*.67,.8,Math.sin(a)*.67],mats.brass,6);}
   } else if(decor.type==='rubble'){
     for(let i=0;i<7;i++){const rock=addBox(group,[.2+(i%3)*.13,.12+(i%2)*.09,.24+(i%4)*.07],[((i*37)%9-4)*.12,.1+(i%2)*.05,((i*53)%9-4)*.1],i%2?mats.wall:mats.wallTop);rock.rotation.y=i*.91;}
+  } else if(decor.type==='weaponrack'){
+    addBox(group,[1.45,.12,.42],[0,.72,0],mats.wood);for(const x of [-.48,0,.48]){const shaft=addCylinder(group,.025,1.35,[x,.94,0],mats.brass,6);shaft.rotation.z=x?-.18:.12;}addBox(group,[1.35,.12,.12],[0,.3,0],mats.wood);
+  } else if(decor.type==='cot'){
+    addBox(group,[.95,.15,1.65],[0,.36,0],mats.wood);addBox(group,[.82,.13,1.48],[0,.47,0],(decor.variant||0)%2?mats.banner:mats.rug,false);for(const x of [-.4,.4])for(const z of [-.72,.72])addBox(group,[.09,.36,.09],[x,.18,z],mats.wood);
+  } else if(decor.type==='cauldron'){
+    const pot=new THREE.Mesh(new THREE.SphereGeometry(.42,12,8,0,Math.PI*2,Math.PI*.45,Math.PI*.55),mats.trim);pot.position.y=.52;group.add(pot);for(const x of [-.3,.3])addBox(group,[.08,.48,.08],[x,.25,0],mats.brass);const glow=new THREE.PointLight(0xff7c28,3.5,7,2);glow.userData.baseIntensity=3.5;glow.position.y=.35;group.add(glow);
+  } else if(decor.type==='goldpile'){
+    for(let i=0;i<18;i++){const coin=addCylinder(group,.08,.025,[((i*31)%9-4)*.09,.04+Math.floor(i/9)*.025,((i*47)%9-4)*.07],mats.brass,10);coin.rotation.x=Math.PI/2+(i%3)*.12;}
   }
 }
 function buildWorld() {
@@ -194,6 +221,12 @@ function buildWorld() {
           const off=name==='n'||name==='s'?[CELL/2-.15,0,0]:[0,0,CELL/2-.15];
           addBox(g,jambSize,[pos[0]+off[0],(WALL_H-.65)/2,pos[2]+off[2]],mats.wall);
           addBox(g,jambSize,[pos[0]-off[0],(WALL_H-.65)/2,pos[2]-off[2]],mats.wall);
+          if(room.id<neighbor){
+            const other=state.rooms.find(r=>r.id===neighbor),closed=room.doorsOpen===false||other?.doorsOpen===false;
+            const door=new THREE.Group(),panel=addBox(door,[name==='n'||name==='s'?1.28:.12,1.92,name==='n'||name==='s'?.12:1.28],[0,.96,0],mats.wood);
+            addBox(door,[name==='n'||name==='s'?1.34:.15,.08,name==='n'||name==='s'?.15:1.34],[0,1.56,0],mats.brass);
+            door.position.set(pos[0],0,pos[2]);if(!closed)door.rotation.y=(name==='n'||name==='s'?1:-1)*Math.PI*.42;door.userData.doorConnection=[room.id,neighbor];g.add(door);
+          }
         } else {
           addBox(g,size,pos,mats.wall);
           const capSize=name==='n'||name==='s'?[CELL+.05,.11,WALL_T+.08]:[WALL_T+.08,.11,CELL+.05];
@@ -233,11 +266,19 @@ function updateSelection() {
   document.querySelector('#decorOptions').classList.toggle('hidden',!d);
   document.querySelector('#rotateBtn span:nth-child(2)').textContent=d?'Turn 90°':'Rotate';
   document.querySelector('#deleteBtn span:nth-child(2)').textContent=d?'Remove':'Demolish';
-  document.querySelector('#selectionInfo').textContent=d?`${d.type[0].toUpperCase()+d.type.slice(1)} · ${Math.round((d.rotation||0)*180/Math.PI)%360}° · ${Math.round((d.scale||1)*100)}%`:r?`Room ${r.id} · ${r.w} × ${r.d} tiles`:'Drag across the grid to raise a chamber.';
+  document.querySelector('#selectionInfo').textContent=d?`${d.type[0].toUpperCase()+d.type.slice(1)} · ${Math.round((d.rotation||0)*180/Math.PI)%360}° · ${Math.round((d.scale||1)*100)}%`:r?`${r.role==='heart'?'Dungeon Heart':`Room ${r.id}`} · ${r.w} × ${r.d} tiles${r.role&&r.role!=='unassigned'?` · ${roomOperational(r)?'Operational':'Inactive'}`:''}`:'Drag across the grid to raise a chamber.';
   const conditionSelect=document.querySelector('#conditionSelect');conditionSelect.disabled=!r||!!d;if(r)conditionSelect.value=r.condition||'occupied';
-  document.querySelector('#dressRoomBtn').disabled=!r||!!d;
+  const roleSelect=document.querySelector('#roleSelect');roleSelect.disabled=!r||!!d||r?.role==='heart';if(r)roleSelect.value=r.role||'unassigned';
+  document.querySelector('#dressRoomBtn').disabled=!r||!!d||r?.role==='heart';
+  document.querySelector('#doorBtn').disabled=!r||!!d;document.querySelector('#pathTestBtn').disabled=!r||!!d;
+  document.querySelector('#doorBtn span:nth-child(2)').textContent=r?.doorsOpen===false?'Open room doors':'Close room doors';
 }
-function updateHUD(){document.querySelector('#roomCount').textContent=state.rooms.length;const n=state.rooms.reduce((s,r)=>s+r.w*r.d,0);document.querySelector('#tileCount').textContent=`${n} tile${n===1?'':'s'}`;document.querySelector('#decorCount').textContent=state.decorations.length;}
+function updateHUD(){document.querySelector('#roomCount').textContent=state.rooms.length;const n=state.rooms.reduce((s,r)=>s+r.w*r.d,0);document.querySelector('#tileCount').textContent=`${n} tile${n===1?'':'s'}`;document.querySelector('#decorCount').textContent=state.decorations.length;document.querySelector('#operationalCount').textContent=state.rooms.filter(roomOperational).length;updateSimHUD();}
+function updateSimHUD(){
+  document.querySelector('#goldValue').textContent=Math.floor(state.gold);document.querySelector('#foodValue').textContent=Math.floor(state.food);document.querySelector('#workerValue').textContent=workers.length;
+  const alert=state.food<20?'Food stores are critically low.':state.gold<40?'The treasury cannot fund construction.':state.rooms.some(r=>r.role&&r.role!=='unassigned'&&!roomOperational(r))?'A functional room needs furnishings or repairs.':state.rooms.length<3?'Expand the keep and assign its first rooms.':'The keep is stable and operating.';
+  document.querySelector('#alerts strong').textContent=alert;
+}
 function toast(msg){const e=document.querySelector('#toast');e.textContent=msg;e.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove('show'),1800);}
 
 function applyPreferences() {
@@ -311,6 +352,7 @@ renderer.domElement.addEventListener('pointerdown',e=>{
     if(state.tool!=='room'){
       const c=pointerCell(e),roomId=c?occupiedMap().get(cellKey(c.x,c.z)):null;
       if(roomId!=null){
+        if(state.gold<10){toast('Need 10 gold for this furnishing');return;}state.gold-=10;
         const id=state.nextDecorId++;state.decorations.push({id,type:state.tool,x:c.x,z:c.z,roomId,rotation:(id%4)*Math.PI/2,scale:1,variant:0});
         buildWorld();if(preferences.autosave)save(true);toast(`${state.tool[0].toUpperCase()+state.tool.slice(1)} placed`);
       } else toast('Decorations must be placed inside a room');
@@ -338,7 +380,7 @@ renderer.domElement.addEventListener('pointerup',e=>{
   if(e.button===2){rightDrag=false;return}
   if(e.button===0&&state.mode==='build'&&state.dragStart){
     const r=normalizeRect(state.dragStart,state.dragEnd);
-    if(state.previewValid){r.id=state.nextId++;r.condition='occupied';state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();constructionBurst(r);if(preferences.autosave)save(true);toast('Chamber raised');}
+    if(state.previewValid){const cost=r.w*r.d*5;if(state.gold<cost){toast(`Need ${cost} gold to raise this chamber`);}else{state.gold-=cost;r.id=state.nextId++;r.condition='occupied';r.role='unassigned';r.doorsOpen=true;state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();constructionBurst(r);if(preferences.autosave)save(true);toast(`Chamber raised · ${cost} gold`);}}
     else {state.selected=pickRoom(e);updateSelection();if(!state.selected)toast('Blocked — choose empty ground');}
     state.dragStart=state.dragEnd=null;previewGroup.clear();
   }
@@ -347,10 +389,10 @@ renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
 renderer.domElement.addEventListener('wheel',e=>{if(state.mode==='build'){cam.distance=Math.max(10,Math.min(60,cam.distance+e.deltaY*.025));updateBuildCamera();}},{passive:true});
 
 function editDecor(mutator,message){const d=state.decorations.find(x=>x.id===state.selectedDecor);if(!d)return;mutator(d);buildWorld();if(preferences.autosave)save(true);toast(message);}
-function deleteSelected(){if(state.selectedDecor!=null){state.decorations=state.decorations.filter(d=>d.id!==state.selectedDecor);state.selectedDecor=null;buildWorld();if(preferences.autosave)save(true);toast('Decoration removed');return;}if(!state.selected)return;state.rooms=state.rooms.filter(r=>r.id!==state.selected);state.decorations=state.decorations.filter(d=>d.roomId!==state.selected);state.selected=null;buildWorld();if(preferences.autosave)save(true);toast('Room demolished');}
+function deleteSelected(){if(state.selectedDecor!=null){state.decorations=state.decorations.filter(d=>d.id!==state.selectedDecor);state.selectedDecor=null;buildWorld();if(preferences.autosave)save(true);toast('Decoration removed');return;}if(!state.selected)return;const room=state.rooms.find(r=>r.id===state.selected);if(room?.role==='heart'){toast('The dungeon heart cannot be demolished');return;}state.gold+=Math.floor((room?.w||0)*(room?.d||0)*2.5);state.rooms=state.rooms.filter(r=>r.id!==state.selected);state.decorations=state.decorations.filter(d=>d.roomId!==state.selected);state.selected=null;buildWorld();if(preferences.autosave)save(true);toast('Room demolished · partial refund');}
 function rotateSelected(){if(state.selectedDecor!=null){editDecor(d=>d.rotation=(d.rotation||0)+Math.PI/2,'Decoration rotated');return;}const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;const nr={...r,w:r.d,d:r.w};nr.x=Math.round(r.x+(r.w-nr.w)/2);nr.z=Math.round(r.z+(r.d-nr.d)/2);if(isValidRect(nr,r.id)){Object.assign(r,nr);buildWorld();if(preferences.autosave)save(true);toast('Room rotated');}else toast('Rotation blocked');}
-function save(silent=false){localStorage.setItem('stonekeep-save',JSON.stringify({version:2,theme:theme.id,rooms:state.rooms,decorations:state.decorations,nextId:state.nextId,nextDecorId:state.nextDecorId}));if(!silent)toast('Dungeon saved locally');}
-function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved dungeon found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.decorations=data.decorations||[];state.nextId=data.nextId||1;state.nextDecorId=data.nextDecorId||1;state.selected=null;state.selectedDecor=null;state.showcase=false;selectTool('room');buildWorld();toast('Dungeon restored');}catch{toast('Save data could not be read');}}
+function save(silent=false){localStorage.setItem('stonekeep-save',JSON.stringify({version:3,theme:theme.id,rooms:state.rooms,decorations:state.decorations,nextId:state.nextId,nextDecorId:state.nextDecorId,gold:state.gold,food:state.food}));if(!silent)toast('Dungeon saved locally');}
+function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved dungeon found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.decorations=data.decorations||[];state.nextId=data.nextId||1;state.nextDecorId=data.nextDecorId||1;state.gold=data.gold??500;state.food=data.food??100;state.selected=null;state.selectedDecor=null;state.showcase=false;selectTool('room');buildWorld();spawnWorkers();toast('Dungeon restored');}catch{toast('Save data could not be read');}}
 
 function setMode(mode){
   state.mode=mode;camera=mode==='build'?buildCamera:exploreCamera;grid.visible=mode==='build'&&preferences.showGrid;selectionGroup.visible=mode==='build';previewGroup.clear();
@@ -366,21 +408,64 @@ function setMode(mode){
 function addDecorToRoom(room,type,rx,rz,rotation=0,scale=1,variant=0){
   state.decorations.push({id:state.nextDecorId++,type,x:room.x+Math.max(0,Math.min(room.w-1,rx)),z:room.z+Math.max(0,Math.min(room.d-1,rz)),roomId:room.id,rotation,scale,variant});
 }
+function findPath(start,goal){
+  const occ=occupiedMap(),queue=[start],came=new Map([[cellKey(start.x,start.z),null]]);
+  while(queue.length){const c=queue.shift();if(c.x===goal.x&&c.z===goal.z)break;for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){const n={x:c.x+dx,z:c.z+dz},nk=cellKey(n.x,n.z),fromId=occ.get(cellKey(c.x,c.z)),toId=occ.get(nk);if(!toId||came.has(nk))continue;if(fromId!==toId){const a=state.rooms.find(r=>r.id===fromId),b=state.rooms.find(r=>r.id===toId);if(a?.doorsOpen===false||b?.doorsOpen===false)continue;}came.set(nk,c);queue.push(n);}}
+  const goalKey=cellKey(goal.x,goal.z);if(!came.has(goalKey))return[];const path=[];for(let c=goal;c;c=came.get(cellKey(c.x,c.z)))path.push(c);return path.reverse();
+}
+function roomCenterCell(room){return{x:room.x+Math.floor(room.w/2),z:room.z+Math.floor(room.d/2)};}
+function spawnWorkers(){
+  const heart=state.rooms.find(r=>r.role==='heart')||state.rooms[0];if(!heart)return;const c=roomCenterCell(heart);
+  workers.forEach((w,i)=>{w.position.set((c.x+.5)*CELL+i*.34,.08,(c.z+.5)*CELL);w.visible=true;w.userData.path=[];w.userData.task='Awaiting orders';});
+  updateSimHUD();
+}
+function assignWorkerTask(worker){
+  const u=worker.userData,operational=state.rooms.filter(roomOperational);let target=null,task='Patrolling';
+  if(u.hunger<65){target=operational.find(r=>r.role==='kitchen');task='Fetching a meal';}
+  if(!target&&u.rest<55){target=operational.find(r=>r.role==='barracks');task='Going to rest';}
+  if(!target){const workRooms=operational.filter(r=>['treasury','kitchen','workshop','guard'].includes(r.role));target=workRooms[(Math.floor(state.simTime/5)+u.index)%Math.max(1,workRooms.length)];task=target?`Working in ${target.role}`:'Waiting for an operational room';}
+  if(!target)return;const start={x:Math.floor(worker.position.x/CELL),z:Math.floor(worker.position.z/CELL)},goal=roomCenterCell(target),path=findPath(start,goal);if(path.length){u.path=path.slice(1);u.targetRoom=target.id;u.task=task;}
+}
+function updateWorker(worker,dt){
+  const u=worker.userData;u.hunger=Math.max(0,u.hunger-dt*.42);u.rest=Math.max(0,u.rest-dt*.18);u.morale=Math.max(15,Math.min(100,u.morale+dt*(u.hunger>35?.05:-.18)));
+  if(!u.path.length){const room=state.rooms.find(r=>r.id===u.targetRoom);if(room?.role==='kitchen'&&state.food>=1&&u.hunger<85){state.food-=1;u.hunger=Math.min(100,u.hunger+28);}if(room?.role==='barracks')u.rest=Math.min(100,u.rest+dt*8);if(Math.floor(state.simTime+u.index)%4===0)assignWorkerTask(worker);return;}
+  const cell=u.path[0],target=new THREE.Vector3((cell.x+.5)*CELL,.08,(cell.z+.5)*CELL),delta=target.clone().sub(worker.position);if(delta.length()<.07)u.path.shift();else{worker.rotation.y=Math.atan2(delta.x,delta.z);worker.position.addScaledVector(delta.normalize(),Math.min(1.75*dt,delta.length()));worker.position.y=.08+Math.abs(Math.sin(state.simTime*7+u.index))*.035;}
+}
+function simulateStep(){
+  const operational=state.rooms.filter(roomOperational),treasuries=operational.filter(r=>r.role==='treasury').length,kitchens=operational.filter(r=>r.role==='kitchen').length;
+  const capacity=500+treasuries*500;state.gold=Math.min(capacity,state.gold+treasuries*1.5);state.food=Math.min(300+kitchens*200,state.food+kitchens*.65);
+  updateSimHUD();
+}
+function sendKeeper(){
+  const room=state.rooms.find(r=>r.id===state.selected);if(!room)return;let start;
+  if(!keeper.visible){const first=state.rooms[0];start={x:first.x+Math.floor(first.w/2),z:first.z+Math.floor(first.d/2)};keeper.position.set((start.x+.5)*CELL,.08,(start.z+.5)*CELL);keeper.visible=true;}
+  else start={x:Math.floor(keeper.position.x/CELL),z:Math.floor(keeper.position.z/CELL)};
+  const goal={x:room.x+Math.floor(room.w/2),z:room.z+Math.floor(room.d/2)},path=findPath(start,goal);if(!path.length){toast('No open route — check the doors');return;}state.keeperPath=path.slice(1);state.keeperPathIndex=0;toast(`Keeper route · ${path.length-1} steps`);
+}
 function dressRoom(){
   const room=state.rooms.find(r=>r.id===state.selected);if(!room)return;
+  if(state.gold<40){toast('Need 40 gold to furnish this room');return;}state.gold-=40;
   state.decorations=state.decorations.filter(d=>d.roomId!==room.id);
-  addDecorToRoom(room,'table',Math.floor(room.w/2),Math.floor(room.d/2),Math.PI/2,1.12,1);
-  addDecorToRoom(room,'bench',Math.max(0,Math.floor(room.w/2)-1),Math.floor(room.d/2),0,.92,1);
-  addDecorToRoom(room,'bench',Math.min(room.w-1,Math.floor(room.w/2)+1),Math.floor(room.d/2),Math.PI,.92,0);
-  if(room.w>=3)addDecorToRoom(room,'bookshelf',0,0,0,.9,0);
-  if(room.d>=3)addDecorToRoom(room,'brazier',room.w-1,room.d-1,0,.9,0);
-  addDecorToRoom(room,room.condition==='battle'?'rubble':'chest',room.w-1,0,Math.PI/4,.85,1);
+  const role=room.role||'unassigned';
+  const recipes={
+    treasury:[['chest',1,1,0,1,1],['chest',-1,1,0,1,2],['goldpile',0,0,0,1.2,0],['brazier',-1,-1,0,.85,0]],
+    barracks:[['cot',0,0,0,.9,0],['cot',-1,0,0,.9,1],['weaponrack',1,-1,Math.PI/2,.9,0],['chest',-1,-1,0,.8,0]],
+    guard:[['table',0,0,0,1,0],['weaponrack',1,0,Math.PI/2,.9,1],['cage',-1,-1,0,.8,0],['brazier',-1,1,0,.8,0]],
+    library:[['bookshelf',-1,-1,0,.9,0],['bookshelf',1,-1,0,.9,1],['table',0,0,0,1,0],['banner',-1,1,0,.85,0]],
+    kitchen:[['table',0,0,0,1,0],['barrel',-1,-1,0,.9,0],['barrel',1,-1,0,.9,1],['cauldron',0,1,0,1,0]],
+    workshop:[['table',0,0,0,1.1,2],['crate',-1,-1,0,.9,0],['barrel',1,-1,0,.85,0],['rubble',1,1,0,.8,0]],
+    crypt:[['statue',0,1,Math.PI,1.15,0],['cage',-1,-1,0,.85,0],['brazier',1,-1,0,.8,0],['rubble',-1,1,0,.8,0]],
+    prison:[['cage',-1,0,0,.9,0],['cage',1,0,0,.9,1],['bench',0,-1,0,.85,0],['brazier',0,1,0,.75,0]],
+    throne:[['statue',-1,1,0,1.1,0],['statue',1,1,0,1.1,1],['banner',-1,-1,0,1,0],['banner',1,-1,0,1,1]]
+  };
+  const recipe=recipes[role]||[['table',0,0,Math.PI/2,1.05,1],['bench',-1,0,0,.9,1],['bookshelf',1,-1,0,.85,0],['chest',1,1,Math.PI/4,.8,1]];
+  for(const [type,ox,oz,rot,scale,variant] of recipe)addDecorToRoom(room,type,Math.floor(room.w/2)+ox,Math.floor(room.d/2)+oz,rot,scale,variant);
   buildWorld();constructionBurst(room);if(preferences.autosave)save(true);toast('Room dressed');
 }
 function buildHeroRoom(){
   let spot=null;for(let z=-12;z<=12&&!spot;z++)for(let x=-12;x<=12;x++){const test={x,z,w:6,d:8};if(isValidRect(test)){spot=test;break;}}
   if(!spot){toast('No space for a 6 × 8 throne hall');return;}
-  const room={...spot,id:state.nextId++,condition:'pristine',preset:'throne'};state.rooms.push(room);state.selected=room.id;state.selectedDecor=null;
+  const room={...spot,id:state.nextId++,condition:'pristine',role:'throne',doorsOpen:true,preset:'throne'};state.rooms.push(room);state.selected=room.id;state.selectedDecor=null;
   for(const [type,rx,rz,rot,scale,variant] of [
     ['statue',0,1,0,1.25,0],['statue',5,1,0,1.25,1],['statue',0,6,Math.PI,1.25,2],['statue',5,6,Math.PI,1.25,0],
     ['brazier',1,1,0,1.05,0],['brazier',4,1,0,1.05,0],['brazier',1,6,0,1.05,0],['brazier',4,6,0,1.05,0],
@@ -418,7 +503,7 @@ function endTutorial() {
   document.querySelector('#tutorial').classList.add('hidden');document.querySelectorAll('.tutorial-focus').forEach(e=>e.classList.remove('tutorial-focus'));localStorage.setItem('stonekeep-tutorial-complete','true');toast('Tutorial complete — begin building');
 }
 function startNewDungeon() {
-  state.rooms=[];state.decorations=[];state.selected=null;state.selectedDecor=null;state.nextId=1;state.nextDecorId=1;state.showcase=false;selectTool('room');buildWorld();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('A new keep awaits');
+  state.rooms=[{id:1,x:-2,z:-2,w:4,d:4,condition:'pristine',role:'heart',doorsOpen:true,preset:'heart'}];state.decorations=[];state.selected=1;state.selectedDecor=null;state.nextId=2;state.nextDecorId=1;state.gold=500;state.food=100;state.timeScale=1;state.simTime=0;state.showcase=false;selectTool('room');buildWorld();spawnWorkers();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('The dungeon heart awakens');
 }
 function selectTool(tool){
   state.tool=tool;document.querySelector('#roomTool').classList.toggle('active',tool==='room');document.querySelectorAll('.decor-tool').forEach(b=>b.classList.toggle('active',b.dataset.decor===tool));
@@ -432,7 +517,12 @@ document.querySelector('#scaleUpBtn').onclick=()=>editDecor(d=>d.scale=Math.min(
 document.querySelector('#variantBtn').onclick=()=>editDecor(d=>d.variant=((d.variant||0)+1)%3,'Decoration varied');
 document.querySelector('#duplicateBtn').onclick=()=>{const d=state.decorations.find(x=>x.id===state.selectedDecor);if(!d)return;const copy={...d,id:state.nextDecorId++,rotation:(d.rotation||0)+Math.PI/12};state.decorations.push(copy);state.selectedDecor=copy.id;buildWorld();if(preferences.autosave)save(true);toast('Decoration duplicated');};
 document.querySelector('#conditionSelect').onchange=e=>{const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;r.condition=e.target.value;buildWorld();if(preferences.autosave)save(true);toast(`${e.target.options[e.target.selectedIndex].text} room applied`);};
+document.querySelector('#roleSelect').onchange=e=>{const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;r.role=e.target.value;if(r.role==='throne')r.preset='throne';buildWorld();if(preferences.autosave)save(true);toast(`${e.target.options[e.target.selectedIndex].text} assigned`);};
+document.querySelector('#doorBtn').onclick=()=>{const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;r.doorsOpen=r.doorsOpen===false;state.keeperPath=[];buildWorld();if(preferences.autosave)save(true);toast(r.doorsOpen?'Doors opened':'Doors secured');};
+document.querySelector('#pathTestBtn').onclick=sendKeeper;
 document.querySelector('#dressRoomBtn').onclick=dressRoom;document.querySelector('#heroRoomBtn').onclick=buildHeroRoom;
+function setTimeScale(scale){state.timeScale=scale;document.querySelector('#pauseTime').classList.toggle('active',scale===0);document.querySelector('#normalTime').classList.toggle('active',scale===1);document.querySelector('#fastTime').classList.toggle('active',scale===3);toast(scale===0?'Keep paused':scale===3?'Time accelerated':'Time resumed');}
+document.querySelector('#pauseTime').onclick=()=>setTimeScale(0);document.querySelector('#normalTime').onclick=()=>setTimeScale(1);document.querySelector('#fastTime').onclick=()=>setTimeScale(3);
 const help=document.querySelector('#help'),settings=document.querySelector('#settings');
 document.querySelector('#helpBtn').onclick=()=>help.classList.remove('hidden');document.querySelector('#closeHelp').onclick=()=>help.classList.add('hidden');document.querySelector('#startTutorialFromHelp').onclick=startTutorial;
 document.querySelector('#newGameBtn').onclick=startNewDungeon;document.querySelector('#tutorialBtn').onclick=startTutorial;
@@ -442,16 +532,18 @@ function openSettings(){settings.classList.remove('hidden');applyPreferences();}
 document.querySelector('#settingsBtn').onclick=openSettings;document.querySelector('#menuSettingsBtn').onclick=openSettings;document.querySelector('#closeSettings').onclick=()=>settings.classList.add('hidden');document.querySelector('#applySettings').onclick=savePreferences;
 document.querySelector('#resetSettings').onclick=()=>{Object.assign(preferences,{quality:'high',volume:70,brightness:125,fog:55,torch:110,gridOpacity:60,fov:68,speed:100,sensitivity:100,showGrid:true,invertLook:false,autosave:true,reduceMotion:false});applyPreferences();};
 document.querySelector('#tutorialExit').onclick=endTutorial;document.querySelector('#tutorialBack').onclick=()=>showTutorialStep(tutorialIndex-1);document.querySelector('#tutorialNext').onclick=()=>tutorialIndex===tutorialSteps.length-1?endTutorial():showTutorialStep(tutorialIndex+1);
-addEventListener('keydown',e=>{keys.add(e.code);if(e.code==='Delete')deleteSelected();if(e.code==='KeyR'&&state.mode==='build')rotateSelected();if(e.code==='KeyB')setMode('build');if((e.ctrlKey||e.metaKey)&&e.code==='KeyS'){e.preventDefault();save();}});
+addEventListener('keydown',e=>{keys.add(e.code);if(e.code==='Delete')deleteSelected();if(e.code==='KeyR'&&state.mode==='build')rotateSelected();if(e.code==='KeyO'&&state.mode==='build')document.querySelector('#doorBtn').click();if(e.code==='KeyP'&&state.mode==='build')sendKeeper();if(e.code==='KeyB')setMode('build');if((e.ctrlKey||e.metaKey)&&e.code==='KeyS'){e.preventDefault();save();}});
 addEventListener('keyup',e=>keys.delete(e.code));
 addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);for(const c of [buildCamera,exploreCamera]){c.aspect=innerWidth/innerHeight;c.updateProjectionMatrix();}});
 
 const clock=new THREE.Clock();
 function tick(){
   const dt=Math.min(clock.getDelta(),.04),elapsed=clock.elapsedTime,speed=(state.mode==='build'?12:4)*(preferences.speed/100);
+  const simDt=dt*state.timeScale;state.simTime+=simDt;state.simAccumulator+=simDt;if(state.simAccumulator>=1){state.simAccumulator-=1;simulateStep();}for(const worker of workers)if(worker.visible)updateWorker(worker,simDt);
   for(const flame of animatedFlames){const pulse=1+Math.sin(elapsed*9+(flame.userData.phase||0))*.08;flame.scale.y=(flame.material===mats.ghost?1:1.7)*pulse;flame.position.y+=Math.sin(elapsed*1.7+(flame.userData.phase||0))*.0007;}
   for(const motes of floatingMotes){motes.rotation.y=elapsed*.008;const a=motes.geometry.attributes.position;for(let i=1;i<a.array.length;i+=3){a.array[i]+=.06*dt;if(a.array[i]>8)a.array[i]=.2;}a.needsUpdate=true;}
   for(const p of [...effectsGroup.children]){p.userData.life-=dt;p.position.addScaledVector(p.userData.velocity,dt);p.userData.velocity.y-=3.2*dt;p.rotation.x+=dt*5;p.rotation.z+=dt*3;p.material.transparent=true;p.material.opacity=Math.max(0,p.userData.life);if(p.userData.life<=0)effectsGroup.remove(p);}
+  if(keeper.visible&&state.keeperPath.length){const cell=state.keeperPath[0],target=new THREE.Vector3((cell.x+.5)*CELL,.08,(cell.z+.5)*CELL),delta=target.clone().sub(keeper.position);if(delta.length()<.08)state.keeperPath.shift();else{keeper.rotation.y=Math.atan2(delta.x,delta.z);keeper.position.addScaledVector(delta.normalize(),Math.min(2.4*dt,delta.length()));}}
   if(state.mode==='build'){
     const forward=new THREE.Vector3(-Math.sin(cam.yaw),0,-Math.cos(cam.yaw)),right=new THREE.Vector3(forward.z,0,-forward.x),move=new THREE.Vector3();
     if(keys.has('KeyW')||keys.has('ArrowUp'))move.add(forward);if(keys.has('KeyS')||keys.has('ArrowDown'))move.sub(forward);if(keys.has('KeyD')||keys.has('ArrowRight'))move.add(right);if(keys.has('KeyA')||keys.has('ArrowLeft'))move.sub(right);
