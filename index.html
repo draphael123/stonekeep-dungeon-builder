@@ -14,6 +14,10 @@
         <button id="buildMode" class="active">BUILD</button>
         <button id="exploreMode">EXPLORE</button>
       </div>
+      <div class="layer-switch">
+        <button id="surfaceLayer" class="active">☀ SURFACE</button>
+        <button id="undergroundLayer">◆ UNDERGROUND</button>
+      </div>
       <div class="resource-bar" aria-label="Dungeon resources">
         <span class="gold-resource">◆ <b id="goldValue">500</b><small>GOLD</small></span>
         <span class="food-resource">● <b id="foodValue">100</b><small>FOOD</small></span>
@@ -31,7 +35,7 @@
     </header>
     <aside class="palette">
       <p class="eyebrow">CONSTRUCTION</p>
-      <div class="room-type-grid">
+      <div id="undergroundBlueprints" class="room-type-grid">
         <button id="roomTool" class="room-type active" data-room-role="unassigned"><span>▦</span><b>Chamber</b><small>Flexible space</small></button>
         <button class="room-type" data-room-role="treasury"><span>◆</span><b>Treasury</b><small>Stores & earns gold</small></button>
         <button class="room-type" data-room-role="barracks"><span>▱</span><b>Barracks</b><small>Workers rest here</small></button>
@@ -46,6 +50,16 @@
         <button class="room-type" data-room-role="training"><span>◎</span><b>Training hall</b><small>Improves guards</small></button>
         <button class="room-type" data-room-role="alchemy"><span>⚗</span><b>Alchemy lab</b><small>Future potions</small></button>
         <button class="room-type" data-room-role="shrine"><span>✦</span><b>Dark shrine</b><small>Generates influence</small></button>
+      </div>
+      <div id="surfaceBlueprints" class="room-type-grid hidden">
+        <button class="room-type active" data-room-role="hall"><span>♜</span><b>Great hall</b><small>Settlement center</small></button>
+        <button class="room-type" data-room-role="cottage"><span>⌂</span><b>Cottage</b><small>Houses residents</small></button>
+        <button class="room-type" data-room-role="forge"><span>⚒</span><b>Forge</b><small>Produces tools</small></button>
+        <button class="room-type" data-room-role="farm"><span>♨</span><b>Farm plot</b><small>Produces food</small></button>
+        <button class="room-type" data-room-role="storehouse"><span>▣</span><b>Storehouse</b><small>Stores materials</small></button>
+        <button class="room-type" data-room-role="lumberyard"><span>♠</span><b>Lumber yard</b><small>Processes timber</small></button>
+        <button class="room-type" data-room-role="road"><span>═</span><b>Road</b><small>Connects buildings</small></button>
+        <button class="room-type" data-room-role="watchtower"><span>♜</span><b>Watchtower</b><small>Guards the border</small></button>
       </div>
       <div id="buildPurpose" class="build-purpose"><b>UNASSIGNED CHAMBER</b><span>5 gold per tile</span><p>A flexible chamber with no production. Assign its purpose later.</p></div>
       <div class="divider"></div>
@@ -98,6 +112,14 @@
         <option value="alchemy">Alchemy laboratory</option>
         <option value="shrine">Dark shrine</option>
         <option value="throne">Throne room</option>
+        <option value="hall">Great hall</option>
+        <option value="cottage">Cottage</option>
+        <option value="forge">Forge</option>
+        <option value="farm">Farm plot</option>
+        <option value="storehouse">Storehouse</option>
+        <option value="lumberyard">Lumber yard</option>
+        <option value="road">Road</option>
+        <option value="watchtower">Watchtower</option>
       </select>
       <select id="conditionSelect" class="keep-select" aria-label="Selected room condition">
         <option value="occupied">Occupied</option>
@@ -137,7 +159,7 @@
         <div class="menu-crest">⌂</div>
         <p class="eyebrow">A DUNGEON ARCHITECT EXPERIENCE</p>
         <h1>STONEKEEP</h1>
-        <p class="menu-subtitle">Raise chambers from the dark. Shape every passage.<br />Walk the halls you create.</p>
+        <p class="menu-subtitle">Found a living settlement. Raise a castle above it.<br />Delve into the dungeon beneath.</p>
         <div class="menu-actions">
           <button id="newGameBtn" class="menu-primary">NEW DUNGEON <span>›</span></button>
           <button id="continueBtn">CONTINUE <span>›</span></button>
@@ -187,6 +209,7 @@
           <div><b>Inspect</b><p>Click a room to select it. Press R to rotate its footprint, or Delete to remove it.</p></div>
           <div><b>Decorate</b><p>Place a decoration, return to the Stone Room tool, then click it to rotate, resize, vary, duplicate, or remove it.</p></div>
           <div><b>Dress rooms</b><p>Select a room, choose its condition, then auto-dress it. The throne-hall preset creates a cinematic hero chamber.</p></div>
+          <div><b>Build across layers</b><p>Use Surface for halls, homes, roads, farms, and workshops. Switch Underground to excavate and manage the dungeon beneath the same site.</p></div>
           <div><b>Navigate</b><p>Right-drag to orbit, wheel to zoom, and use WASD or arrows to pan the build camera.</p></div>
           <div><b>Explore</b><p>Enter Explore, click the view, then use WASD and the mouse. Escape releases the pointer.</p></div>
         </div>
