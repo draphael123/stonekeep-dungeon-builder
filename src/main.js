@@ -5,7 +5,7 @@ import { THEMES, makeThemeMaterials } from './themes.js';
 const CELL = 2, WALL_H = 2.8, WALL_T = .24;
 const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
-const state = { rooms: [], decorations: [], selected: null, tool: 'room', mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true };
+const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true };
 const preferences = { quality: 'high', volume: 70, brightness: 125, fog: 55, torch: 110, gridOpacity: 60, fov: 68, speed: 100, sensitivity: 100, showGrid: true, invertLook: false, autosave: true, reduceMotion: false };
 const keys = new Set();
 
@@ -108,7 +108,7 @@ function addRoomProps(group,room) {
 }
 function addPlacedDecoration(group,decor) {
   const x=(decor.x+.5)*CELL,z=(decor.z+.5)*CELL,rot=decor.rotation||0;
-  group.position.set(x,0,z);group.rotation.y=rot;
+  group.position.set(x,0,z);group.rotation.y=rot;group.scale.setScalar(decor.scale||1);
   if(decor.type==='table'){
     addBox(group,[1.45,.13,.7],[0,.78,0],mats.wood);for(const dx of [-.55,.55])for(const dz of [-.22,.22])addBox(group,[.1,.7,.1],[dx,.39,dz],mats.wood);
   } else if(decor.type==='chest'){
@@ -120,6 +120,21 @@ function addPlacedDecoration(group,decor) {
     const flame=new THREE.Mesh(new THREE.SphereGeometry(.13,8,6),mats.flame);flame.scale.y=1.65;flame.position.y=.83;group.add(flame);const light=new THREE.PointLight(0xff8a32,5.2,9,2);light.userData.baseIntensity=5.2;light.position.y=1.1;group.add(light);
   } else if(decor.type==='banner'){
     addCylinder(group,.06,2.2,[0,1.1,0],mats.brass,8);addBox(group,[1.05,.06,.06],[.42,2.05,0],mats.brass);const cloth=new THREE.Mesh(new THREE.PlaneGeometry(.72,1.2),mats.banner);cloth.position.set(.42,1.43,0);group.add(cloth);
+  } else if(decor.type==='bench'){
+    addBox(group,[1.5,.12,.42],[0,.52,0],mats.wood);for(const dx of [-.58,.58])addBox(group,[.12,.48,.34],[dx,.26,0],mats.wood);if((decor.variant||0)%2)addBox(group,[1.5,.48,.1],[0,.77,.16],mats.wood);
+  } else if(decor.type==='bookshelf'){
+    addBox(group,[1.35,1.8,.28],[0,.92,0],mats.wood);for(const y of [.35,.9,1.45])addBox(group,[1.22,.08,.38],[0,y,0],mats.trim);
+    for(let i=0;i<8;i++)addBox(group,[.09+(i%3)*.025,.32,.19],[-.5+i*.14,.55+(i%2)*.55,-.05],i%3===0?mats.banner:mats.rug);
+  } else if(decor.type==='crate'){
+    addBox(group,[.82,.72,.82],[0,.38,0],mats.wood);addBox(group,[.9,.09,.09],[0,.4,.43],mats.trim);addBox(group,[.09,.09,.9],[.43,.4,0],mats.trim);
+  } else if(decor.type==='bedroll'){
+    addBox(group,[.85,.12,1.55],[0,.11,0],(decor.variant||0)%2?mats.banner:mats.rug,false);const pillow=addCylinder(group,.24,.72,[0,.24,-.55],mats.wood,12);pillow.rotation.z=Math.PI/2;
+  } else if(decor.type==='statue'){
+    addBox(group,[.82,.22,.82],[0,.12,0],mats.wallTop);addCylinder(group,.3,1.2,[0,.82,0],mats.wallTop,8);const head=new THREE.Mesh(new THREE.SphereGeometry(.28,8,7),mats.wall);head.position.y=1.62;group.add(head);
+  } else if(decor.type==='cage'){
+    addCylinder(group,.72,.09,[0,.05,0],mats.trim,12);addCylinder(group,.72,.09,[0,1.55,0],mats.trim,12);for(let i=0;i<10;i++){const a=i*Math.PI/5;addCylinder(group,.035,1.5,[Math.cos(a)*.67,.8,Math.sin(a)*.67],mats.brass,6);}
+  } else if(decor.type==='rubble'){
+    for(let i=0;i<7;i++){const rock=addBox(group,[.2+(i%3)*.13,.12+(i%2)*.09,.24+(i%4)*.07],[((i*37)%9-4)*.12,.1+(i%2)*.05,((i*53)%9-4)*.1],i%2?mats.wall:mats.wallTop);rock.rotation.y=i*.91;}
   }
 }
 function buildWorld() {
@@ -169,9 +184,15 @@ function updatePreview() {
 function updateSelection() {
   selectionGroup.clear();
   const r=state.rooms.find(x=>x.id===state.selected);
-  if(r){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w*CELL+.12,.08,r.d*CELL+.12),mats.selected);m.position.set((r.x+r.w/2)*CELL,.25,(r.z+r.d/2)*CELL);selectionGroup.add(m);}
-  document.querySelector('#rotateBtn').disabled=!r; document.querySelector('#deleteBtn').disabled=!r;
-  document.querySelector('#selectionInfo').textContent=r?`Room ${r.id} · ${r.w} × ${r.d} tiles`:'Drag across the grid to raise a chamber.';
+  const d=state.decorations.find(x=>x.id===state.selectedDecor);
+  if(d){const ring=new THREE.Mesh(new THREE.RingGeometry(.72,.86,32),new THREE.MeshBasicMaterial({color:0xe1b85b,side:THREE.DoubleSide,transparent:true,opacity:.9}));ring.rotation.x=-Math.PI/2;ring.position.set((d.x+.5)*CELL,.22,(d.z+.5)*CELL);selectionGroup.add(ring);}
+  else if(r){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w*CELL+.12,.08,r.d*CELL+.12),mats.selected);m.position.set((r.x+r.w/2)*CELL,.25,(r.z+r.d/2)*CELL);selectionGroup.add(m);}
+  document.querySelector('#rotateBtn').disabled=!r&&!d; document.querySelector('#deleteBtn').disabled=!r&&!d;
+  document.querySelector('#selectionLabel').textContent=d?'SELECTED DECORATION':'SELECTED ROOM';
+  document.querySelector('#decorOptions').classList.toggle('hidden',!d);
+  document.querySelector('#rotateBtn span:nth-child(2)').textContent=d?'Turn 90°':'Rotate';
+  document.querySelector('#deleteBtn span:nth-child(2)').textContent=d?'Remove':'Demolish';
+  document.querySelector('#selectionInfo').textContent=d?`${d.type[0].toUpperCase()+d.type.slice(1)} · ${Math.round((d.rotation||0)*180/Math.PI)%360}° · ${Math.round((d.scale||1)*100)}%`:r?`Room ${r.id} · ${r.w} × ${r.d} tiles`:'Drag across the grid to raise a chamber.';
 }
 function updateHUD(){document.querySelector('#roomCount').textContent=state.rooms.length;const n=state.rooms.reduce((s,r)=>s+r.w*r.d,0);document.querySelector('#tileCount').textContent=`${n} tile${n===1?'':'s'}`;document.querySelector('#decorCount').textContent=state.decorations.length;}
 function toast(msg){const e=document.querySelector('#toast');e.textContent=msg;e.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove('show'),1800);}
@@ -233,6 +254,11 @@ function pickRoom(e){
   raycaster.setFromCamera(mouse,buildCamera);const hits=raycaster.intersectObjects(world.children,true);if(!hits.length)return null;
   let o=hits[0].object;while(o.parent&&o.userData.roomId==null)o=o.parent;return o.userData.roomId??null;
 }
+function pickDecoration(e){
+  const rect=renderer.domElement.getBoundingClientRect();mouse.x=((e.clientX-rect.left)/rect.width)*2-1;mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(mouse,buildCamera);const hits=raycaster.intersectObjects(world.children,true);
+  for(const hit of hits){let o=hit.object;while(o&&o!==world){if(o.userData.decorId!=null)return o.userData.decorId;o=o.parent;}}return null;
+}
 renderer.domElement.addEventListener('pointerdown',e=>{
   if(state.mode!=='build') { if(document.pointerLockElement!==renderer.domElement)renderer.domElement.requestPointerLock(); return; }
   lastPointer={x:e.clientX,y:e.clientY};
@@ -242,17 +268,19 @@ renderer.domElement.addEventListener('pointerdown',e=>{
     if(state.tool!=='room'){
       const c=pointerCell(e),roomId=c?occupiedMap().get(cellKey(c.x,c.z)):null;
       if(roomId!=null){
-        state.decorations.push({id:state.nextDecorId++,type:state.tool,x:c.x,z:c.z,roomId,rotation:(state.nextDecorId%4)*Math.PI/2});
+        const id=state.nextDecorId++;state.decorations.push({id,type:state.tool,x:c.x,z:c.z,roomId,rotation:(id%4)*Math.PI/2,scale:1,variant:0});
         buildWorld();if(preferences.autosave)save(true);toast(`${state.tool[0].toUpperCase()+state.tool.slice(1)} placed`);
       } else toast('Decorations must be placed inside a room');
       return;
     }
+    const decorId=pickDecoration(e);
+    if(decorId!=null){state.selectedDecor=decorId;state.selected=null;state.dragStart=state.dragEnd=null;previewGroup.clear();updateSelection();return;}
     // Existing dungeon geometry takes priority over the construction grid.
     // This keeps a normal click from accidentally starting an invalid room
     // preview on top of the room the player meant to select.
     const roomId=pickRoom(e);
     if(roomId!=null){
-      state.selected=roomId;state.dragStart=state.dragEnd=null;previewGroup.clear();updateSelection();return;
+      state.selected=roomId;state.selectedDecor=null;state.dragStart=state.dragEnd=null;previewGroup.clear();updateSelection();return;
     }
     const c=pointerCell(e);if(c){state.dragStart=c;state.dragEnd=c;updatePreview();}
   }
@@ -275,10 +303,11 @@ renderer.domElement.addEventListener('pointerup',e=>{
 renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
 renderer.domElement.addEventListener('wheel',e=>{if(state.mode==='build'){cam.distance=Math.max(10,Math.min(60,cam.distance+e.deltaY*.025));updateBuildCamera();}},{passive:true});
 
-function deleteSelected(){if(!state.selected)return;state.rooms=state.rooms.filter(r=>r.id!==state.selected);state.decorations=state.decorations.filter(d=>d.roomId!==state.selected);state.selected=null;buildWorld();if(preferences.autosave)save(true);toast('Room demolished');}
-function rotateSelected(){const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;const nr={...r,w:r.d,d:r.w};nr.x=Math.round(r.x+(r.w-nr.w)/2);nr.z=Math.round(r.z+(r.d-nr.d)/2);if(isValidRect(nr,r.id)){Object.assign(r,nr);buildWorld();if(preferences.autosave)save(true);toast('Room rotated');}else toast('Rotation blocked');}
+function editDecor(mutator,message){const d=state.decorations.find(x=>x.id===state.selectedDecor);if(!d)return;mutator(d);buildWorld();if(preferences.autosave)save(true);toast(message);}
+function deleteSelected(){if(state.selectedDecor!=null){state.decorations=state.decorations.filter(d=>d.id!==state.selectedDecor);state.selectedDecor=null;buildWorld();if(preferences.autosave)save(true);toast('Decoration removed');return;}if(!state.selected)return;state.rooms=state.rooms.filter(r=>r.id!==state.selected);state.decorations=state.decorations.filter(d=>d.roomId!==state.selected);state.selected=null;buildWorld();if(preferences.autosave)save(true);toast('Room demolished');}
+function rotateSelected(){if(state.selectedDecor!=null){editDecor(d=>d.rotation=(d.rotation||0)+Math.PI/2,'Decoration rotated');return;}const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;const nr={...r,w:r.d,d:r.w};nr.x=Math.round(r.x+(r.w-nr.w)/2);nr.z=Math.round(r.z+(r.d-nr.d)/2);if(isValidRect(nr,r.id)){Object.assign(r,nr);buildWorld();if(preferences.autosave)save(true);toast('Room rotated');}else toast('Rotation blocked');}
 function save(silent=false){localStorage.setItem('stonekeep-save',JSON.stringify({version:2,theme:theme.id,rooms:state.rooms,decorations:state.decorations,nextId:state.nextId,nextDecorId:state.nextDecorId}));if(!silent)toast('Dungeon saved locally');}
-function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved dungeon found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.decorations=data.decorations||[];state.nextId=data.nextId||1;state.nextDecorId=data.nextDecorId||1;state.selected=null;state.showcase=false;selectTool('room');buildWorld();toast('Dungeon restored');}catch{toast('Save data could not be read');}}
+function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved dungeon found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.decorations=data.decorations||[];state.nextId=data.nextId||1;state.nextDecorId=data.nextDecorId||1;state.selected=null;state.selectedDecor=null;state.showcase=false;selectTool('room');buildWorld();toast('Dungeon restored');}catch{toast('Save data could not be read');}}
 
 function setMode(mode){
   state.mode=mode;camera=mode==='build'?buildCamera:exploreCamera;grid.visible=mode==='build'&&preferences.showGrid;selectionGroup.visible=mode==='build';previewGroup.clear();
@@ -319,7 +348,7 @@ function endTutorial() {
   document.querySelector('#tutorial').classList.add('hidden');document.querySelectorAll('.tutorial-focus').forEach(e=>e.classList.remove('tutorial-focus'));localStorage.setItem('stonekeep-tutorial-complete','true');toast('Tutorial complete — begin building');
 }
 function startNewDungeon() {
-  state.rooms=[];state.decorations=[];state.selected=null;state.nextId=1;state.nextDecorId=1;state.showcase=false;selectTool('room');buildWorld();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('A new keep awaits');
+  state.rooms=[];state.decorations=[];state.selected=null;state.selectedDecor=null;state.nextId=1;state.nextDecorId=1;state.showcase=false;selectTool('room');buildWorld();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('A new keep awaits');
 }
 function selectTool(tool){
   state.tool=tool;document.querySelector('#roomTool').classList.toggle('active',tool==='room');document.querySelectorAll('.decor-tool').forEach(b=>b.classList.toggle('active',b.dataset.decor===tool));
@@ -327,6 +356,11 @@ function selectTool(tool){
 }
 document.querySelector('#buildMode').onclick=()=>setMode('build');document.querySelector('#exploreMode').onclick=()=>setMode('explore');
 document.querySelector('#deleteBtn').onclick=deleteSelected;document.querySelector('#rotateBtn').onclick=rotateSelected;document.querySelector('#saveBtn').onclick=save;document.querySelector('#loadBtn').onclick=load;
+document.querySelector('#rotateFineBtn').onclick=()=>editDecor(d=>d.rotation=(d.rotation||0)+Math.PI/12,'Turned 15°');
+document.querySelector('#scaleDownBtn').onclick=()=>editDecor(d=>d.scale=Math.max(.65,(d.scale||1)-.1),'Decoration resized');
+document.querySelector('#scaleUpBtn').onclick=()=>editDecor(d=>d.scale=Math.min(1.4,(d.scale||1)+.1),'Decoration resized');
+document.querySelector('#variantBtn').onclick=()=>editDecor(d=>d.variant=((d.variant||0)+1)%3,'Decoration varied');
+document.querySelector('#duplicateBtn').onclick=()=>{const d=state.decorations.find(x=>x.id===state.selectedDecor);if(!d)return;const copy={...d,id:state.nextDecorId++,rotation:(d.rotation||0)+Math.PI/12};state.decorations.push(copy);state.selectedDecor=copy.id;buildWorld();if(preferences.autosave)save(true);toast('Decoration duplicated');};
 const help=document.querySelector('#help'),settings=document.querySelector('#settings');
 document.querySelector('#helpBtn').onclick=()=>help.classList.remove('hidden');document.querySelector('#closeHelp').onclick=()=>help.classList.add('hidden');document.querySelector('#startTutorialFromHelp').onclick=startTutorial;
 document.querySelector('#newGameBtn').onclick=startNewDungeon;document.querySelector('#tutorialBtn').onclick=startTutorial;
