@@ -23,7 +23,16 @@
     </header>
     <aside class="palette">
       <p class="eyebrow">CONSTRUCTION</p>
-      <button class="tool active"><span class="tool-icon">▦</span><span>Stone Room<small>Drag on the grid</small></span><kbd>1</kbd></button>
+      <button id="roomTool" class="tool active"><span class="tool-icon">▦</span><span>Stone Room<small>Drag on the grid</small></span><kbd>1</kbd></button>
+      <div class="divider"></div>
+      <p class="eyebrow">DECORATIONS</p>
+      <div class="decor-grid">
+        <button class="decor-tool" data-decor="table" title="War Table"><span>▤</span>TABLE</button>
+        <button class="decor-tool" data-decor="chest" title="Treasure Chest"><span>▣</span>CHEST</button>
+        <button class="decor-tool" data-decor="barrel" title="Barrel"><span>●</span>BARREL</button>
+        <button class="decor-tool" data-decor="brazier" title="Brazier"><span>♨</span>BRAZIER</button>
+        <button class="decor-tool" data-decor="banner" title="Banner Stand"><span>⚑</span>BANNER</button>
+      </div>
       <div class="divider"></div>
       <p class="eyebrow">SELECTED ROOM</p>
       <button id="rotateBtn" class="tool compact"><span class="tool-icon">↻</span><span>Rotate</span><kbd>R</kbd></button>
@@ -36,6 +45,7 @@
       <p class="eyebrow">DUNGEON LEDGER</p>
       <div><span>Rooms</span><strong id="roomCount">0</strong></div>
       <div><span>Floor area</span><strong id="tileCount">0 tiles</strong></div>
+      <div><span>Decorations</span><strong id="decorCount">0</strong></div>
       <div><span>Theme</span><strong>Stone Keep</strong></div>
       <p id="selectionInfo">Drag across the grid to raise your first chamber.</p>
     </section>
@@ -68,6 +78,7 @@
         <h2>Settings</h2>
         <label><span>Graphics quality<small>Adjust shadows and rendering detail</small></span><select id="qualitySetting"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
         <label><span>Master volume<small>Interface and ambience volume</small></span><input id="volumeSetting" type="range" min="0" max="100" value="70" /></label>
+        <label><span>Brightness<small>Dungeon exposure and shadow visibility</small></span><input id="brightnessSetting" type="range" min="70" max="160" value="125" /></label>
         <label><span>Camera speed<small>Build and exploration movement speed</small></span><input id="speedSetting" type="range" min="50" max="150" value="100" /></label>
         <label class="check-row"><span>Reduce motion<small>Disables animated interface transitions</small></span><input id="motionSetting" type="checkbox" /></label>
         <div class="settings-actions"><button id="resetSettings">RESET DEFAULTS</button><button id="applySettings" class="primary">APPLY</button></div>
@@ -90,6 +101,7 @@
         <div class="help-grid">
           <div><b>Build</b><p>Drag the left mouse button over empty tiles. Adjacent chambers automatically receive connecting doorways.</p></div>
           <div><b>Inspect</b><p>Click a room to select it. Press R to rotate its footprint, or Delete to remove it.</p></div>
+          <div><b>Decorate</b><p>Choose a decoration from the palette, then click any tile inside a completed room to place it.</p></div>
           <div><b>Navigate</b><p>Right-drag to orbit, wheel to zoom, and use WASD or arrows to pan the build camera.</p></div>
           <div><b>Explore</b><p>Enter Explore, click the view, then use WASD and the mouse. Escape releases the pointer.</p></div>
         </div>

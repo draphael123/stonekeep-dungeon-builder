@@ -48,6 +48,8 @@ For a production build, run `npm run build`, then `npm run preview`.
 - Seven-step guided tutorial that highlights and explains the live build controls
 - Persistent graphics quality, master volume, camera speed, and reduced-motion settings
 - Cinematic title-screen showcase plus procedurally textured masonry, architectural pillars, banners, rugs, furniture, treasure chests, barrels, rubble, candles, and room-aware warm lighting
+- Placeable room decorations: tables, treasure chests, barrels, braziers, and banner stands, all persisted with save/load
+- User-adjustable dungeon brightness with a significantly brighter default lighting profile
 
 ## Architecture
 
