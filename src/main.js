@@ -28,8 +28,8 @@ sun.position.set(-18, 28, 14); sun.intensity*=1.35;sun.castShadow = true; sun.sh
 sun.shadow.camera.left = sun.shadow.camera.bottom = -35; sun.shadow.camera.right = sun.shadow.camera.top = 35;
 scene.add(sun);
 
-const world = new THREE.Group(), previewGroup = new THREE.Group(), selectionGroup = new THREE.Group();
-scene.add(world, previewGroup, selectionGroup);
+const world = new THREE.Group(), previewGroup = new THREE.Group(), selectionGroup = new THREE.Group(), atmosphereGroup=new THREE.Group(), effectsGroup=new THREE.Group();
+scene.add(world, previewGroup, selectionGroup, atmosphereGroup, effectsGroup);
 
 const grid = new THREE.GridHelper(80, 40, 0x86754f, 0x353b38);
 grid.position.y = .012; grid.material.transparent = true; grid.material.opacity = .6; scene.add(grid);
@@ -45,6 +45,16 @@ let camera = buildCamera;
 const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
 const plane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
 let rightDrag = false, lastPointer = {x:0,y:0}, toastTimer;
+const animatedFlames=[],floatingMotes=[];
+
+function buildAtmosphere(){
+  atmosphereGroup.clear();floatingMotes.length=0;
+  const positions=new Float32Array(220*3);for(let i=0;i<220;i++){positions[i*3]=(Math.random()-.5)*58;positions[i*3+1]=.25+Math.random()*8;positions[i*3+2]=(Math.random()-.5)*58;}
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  const motes=new THREE.Points(geo,new THREE.PointsMaterial({color:0xd8b66a,size:.035,transparent:true,opacity:.42,depthWrite:false,blending:THREE.AdditiveBlending}));
+  motes.userData.baseY=positions.slice();atmosphereGroup.add(motes);floatingMotes.push(motes);
+}
+buildAtmosphere();
 
 function updateBuildCamera() {
   const cp = Math.cos(cam.pitch);
@@ -74,8 +84,28 @@ function makeTorch(group,x,z,side) {
   const offsets={n:[0,0,-.17],s:[0,0,.17],w:[-.17,0,0],e:[.17,0,0]};
   const [ox,,oz]=offsets[side]; const holder=addBox(group,[.08,.45,.08],[x+ox,1.38,z+oz],mats.trim);
   holder.rotation[side==='n'||side==='s'?'x':'z']=side==='n'||side==='w'?.35:-.35;
-  const flame=new THREE.Mesh(new THREE.SphereGeometry(.09,8,6),mats.flame); flame.scale.y=1.7; flame.position.set(x+ox*1.8,1.69,z+oz*1.8); group.add(flame);
+  const flame=new THREE.Mesh(new THREE.SphereGeometry(.09,8,6),mats.flame); flame.scale.y=1.7; flame.position.set(x+ox*1.8,1.69,z+oz*1.8); flame.userData.phase=Math.random()*6.28;group.add(flame);animatedFlames.push(flame);
   const light=new THREE.PointLight(0xff9a42,4.5,11,2);light.userData.baseIntensity=4.5;light.position.copy(flame.position);light.castShadow=false;group.add(light);
+}
+function addConditionProps(group,room){
+  const condition=room.condition||'occupied',cx=(room.x+room.w/2)*CELL,cz=(room.z+room.d/2)*CELL;
+  if(condition==='pristine')return;
+  if(condition==='abandoned'||condition==='battle'){
+    const count=condition==='battle'?10:5;for(let i=0;i<count;i++){const rock=addBox(group,[.12+(i%3)*.13,.08+(i%2)*.1,.16+(i%4)*.09],[room.x*CELL+.45+(i*1.37%(room.w*CELL-1)),.14,room.z*CELL+.4+(i*.83%(room.d*CELL-1))],i%2?mats.wallTop:mats.wall);rock.rotation.y=i*.67;}
+  }
+  if(condition==='battle'){for(let i=0;i<3;i++){const scorch=addCylinder(group,.35+i*.12,.012,[cx+(i-1)*.7,.105,cz+(i%2?-.55:.48)],mats.soot,16);scorch.scale.z=.55;}}
+  if(condition==='overgrown'){for(let i=0;i<9;i++){const moss=addCylinder(group,.12+(i%3)*.08,.025,[room.x*CELL+.35+(i*.91%(room.w*CELL-1)),.11,room.z*CELL+.3+(i*1.27%(room.d*CELL-1))],mats.moss,9);moss.scale.z=1.8;}}
+  if(condition==='haunted'){
+    const glow=new THREE.PointLight(0x63cbd0,3.2,Math.max(room.w,room.d)*CELL*1.2,2);glow.userData.baseIntensity=3.2;glow.position.set(cx,1.8,cz);group.add(glow);
+    for(let i=0;i<3;i++){const wisp=new THREE.Mesh(new THREE.SphereGeometry(.11+i*.03,9,7),mats.ghost);wisp.position.set(cx+(i-1)*.65,1.05+i*.32,cz+(i%2?.45:-.35));wisp.userData.phase=i*2.1;group.add(wisp);animatedFlames.push(wisp);}
+  }
+}
+function addCeiling(group,room){
+  const cx=(room.x+room.w/2)*CELL,cz=(room.z+room.d/2)*CELL,cg=new THREE.Group();cg.userData.ceiling=true;
+  addBox(cg,[room.w*CELL-.18,.16,room.d*CELL-.18],[cx,WALL_H+.55,cz],mats.wallTop);
+  const alongX=room.w>=room.d;const bays=Math.max(2,Math.ceil((alongX?room.w:room.d)/2));
+  for(let i=0;i<=bays;i++){const t=i/bays-.5;const beam=addBox(cg,alongX?[.16,.28,room.d*CELL-.25]:[room.w*CELL-.25,.28,.16],[alongX?cx+t*(room.w*CELL-.35):cx,WALL_H+.38,alongX?cz:cz+t*(room.d*CELL-.35)],mats.wood);beam.rotation[alongX?'z':'x']=0;}
+  cg.visible=state.mode==='explore';group.add(cg);
 }
 function addCylinder(group,r,depth,pos,material,segments=10){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,depth,segments),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;
@@ -105,6 +135,13 @@ function addRoomProps(group,room) {
   if(room.id%2===0){for(let i=0;i<3;i++){const rock=addBox(group,[.22+i*.06,.12+i*.03,.18+i*.04],[room.x*CELL+.5+i*.22,.15,(room.z+room.d)*CELL-.48-i*.12],mats.wallTop);rock.rotation.y=i*.7;}}
   // Heraldic banner on the north wall.
   if(room.w>=3){const banner=new THREE.Mesh(new THREE.PlaneGeometry(1.05,1.45),mats.banner);banner.position.set(cx,1.75,room.z*CELL+.14);banner.rotation.y=Math.PI;group.add(banner);addBox(group,[1.3,.07,.07],[cx,2.49,room.z*CELL+.12],mats.brass);}
+  if(room.preset==='throne'){
+    addBox(group,[3.8,.28,2.15],[cx,.2,(room.z+room.d-1)*CELL],mats.wallTop);
+    addBox(group,[1.15,1.45,.2],[cx,1.12,(room.z+room.d-.55)*CELL],mats.wood);
+    addBox(group,[1.42,.17,.82],[cx,.53,(room.z+room.d-.78)*CELL],mats.banner);
+    for(const dx of [-.58,.58])addCylinder(group,.11,1.9,[cx+dx,1.34,(room.z+room.d-.55)*CELL],mats.brass,8);
+    const crown=new THREE.PointLight(0xffc36a,3.8,10,2);crown.userData.baseIntensity=3.8;crown.position.set(cx,2.4,(room.z+room.d-1)*CELL);group.add(crown);
+  }
 }
 function addPlacedDecoration(group,decor) {
   const x=(decor.x+.5)*CELL,z=(decor.z+.5)*CELL,rot=decor.rotation||0;
@@ -138,7 +175,7 @@ function addPlacedDecoration(group,decor) {
   }
 }
 function buildWorld() {
-  world.clear();
+  world.clear();animatedFlames.length=0;
   const occ=occupiedMap();
   for(const room of state.rooms) {
     const g=new THREE.Group(); g.userData.roomId=room.id; world.add(g);
@@ -165,13 +202,17 @@ function buildWorld() {
         }
       }
     }
-    addRoomProps(g,room);
+    addRoomProps(g,room);addConditionProps(g,room);addCeiling(g,room);
   }
   for(const decor of state.decorations){
     const dg=new THREE.Group();dg.userData.roomId=decor.roomId;dg.userData.decorId=decor.id;world.add(dg);addPlacedDecoration(dg,decor);
   }
   updateSelection();
   updateHUD();
+}
+function constructionBurst(room){
+  if(preferences.reduceMotion)return;const cx=(room.x+room.w/2)*CELL,cz=(room.z+room.d/2)*CELL;
+  for(let i=0;i<24;i++){const material=(i%4?mats.wallTop:mats.flame).clone();material.transparent=true;const p=new THREE.Mesh(new THREE.BoxGeometry(.06,.06,.06),material);p.position.set(cx+(Math.random()-.5)*room.w*CELL,.15,cz+(Math.random()-.5)*room.d*CELL);p.userData.velocity=new THREE.Vector3((Math.random()-.5)*1.6,.7+Math.random()*1.8,(Math.random()-.5)*1.6);p.userData.life=.65+Math.random()*.55;effectsGroup.add(p);}
 }
 function updatePreview() {
   previewGroup.clear(); if(!state.dragStart||!state.dragEnd)return;
@@ -193,6 +234,8 @@ function updateSelection() {
   document.querySelector('#rotateBtn span:nth-child(2)').textContent=d?'Turn 90°':'Rotate';
   document.querySelector('#deleteBtn span:nth-child(2)').textContent=d?'Remove':'Demolish';
   document.querySelector('#selectionInfo').textContent=d?`${d.type[0].toUpperCase()+d.type.slice(1)} · ${Math.round((d.rotation||0)*180/Math.PI)%360}° · ${Math.round((d.scale||1)*100)}%`:r?`Room ${r.id} · ${r.w} × ${r.d} tiles`:'Drag across the grid to raise a chamber.';
+  const conditionSelect=document.querySelector('#conditionSelect');conditionSelect.disabled=!r||!!d;if(r)conditionSelect.value=r.condition||'occupied';
+  document.querySelector('#dressRoomBtn').disabled=!r||!!d;
 }
 function updateHUD(){document.querySelector('#roomCount').textContent=state.rooms.length;const n=state.rooms.reduce((s,r)=>s+r.w*r.d,0);document.querySelector('#tileCount').textContent=`${n} tile${n===1?'':'s'}`;document.querySelector('#decorCount').textContent=state.decorations.length;}
 function toast(msg){const e=document.querySelector('#toast');e.textContent=msg;e.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove('show'),1800);}
@@ -295,7 +338,7 @@ renderer.domElement.addEventListener('pointerup',e=>{
   if(e.button===2){rightDrag=false;return}
   if(e.button===0&&state.mode==='build'&&state.dragStart){
     const r=normalizeRect(state.dragStart,state.dragEnd);
-    if(state.previewValid){r.id=state.nextId++;state.rooms.push(r);state.selected=r.id;buildWorld();if(preferences.autosave)save(true);toast('Chamber raised');}
+    if(state.previewValid){r.id=state.nextId++;r.condition='occupied';state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();constructionBurst(r);if(preferences.autosave)save(true);toast('Chamber raised');}
     else {state.selected=pickRoom(e);updateSelection();if(!state.selected)toast('Blocked — choose empty ground');}
     state.dragStart=state.dragEnd=null;previewGroup.clear();
   }
@@ -316,7 +359,34 @@ function setMode(mode){
   document.querySelector('#hint').textContent=mode==='build'?'LMB DRAG Place room · RMB DRAG Rotate view · WASD/ARROWS Pan · WHEEL Zoom':'CLICK Capture mouse · WASD Move · MOUSE Look · ESC Release · B Return to build';
   if(mode==='explore'&&state.rooms.length){const r=state.rooms[0];exploreCamera.position.set((r.x+.5)*CELL,1.65,(r.z+.5)*CELL);}
   if(mode==='build'&&document.pointerLockElement)document.exitPointerLock();
+  world.traverse(o=>{if(o.userData.ceiling)o.visible=mode==='explore';});
   toast(mode==='build'?'Build mode':'Explore mode — click to look');
+}
+
+function addDecorToRoom(room,type,rx,rz,rotation=0,scale=1,variant=0){
+  state.decorations.push({id:state.nextDecorId++,type,x:room.x+Math.max(0,Math.min(room.w-1,rx)),z:room.z+Math.max(0,Math.min(room.d-1,rz)),roomId:room.id,rotation,scale,variant});
+}
+function dressRoom(){
+  const room=state.rooms.find(r=>r.id===state.selected);if(!room)return;
+  state.decorations=state.decorations.filter(d=>d.roomId!==room.id);
+  addDecorToRoom(room,'table',Math.floor(room.w/2),Math.floor(room.d/2),Math.PI/2,1.12,1);
+  addDecorToRoom(room,'bench',Math.max(0,Math.floor(room.w/2)-1),Math.floor(room.d/2),0,.92,1);
+  addDecorToRoom(room,'bench',Math.min(room.w-1,Math.floor(room.w/2)+1),Math.floor(room.d/2),Math.PI,.92,0);
+  if(room.w>=3)addDecorToRoom(room,'bookshelf',0,0,0,.9,0);
+  if(room.d>=3)addDecorToRoom(room,'brazier',room.w-1,room.d-1,0,.9,0);
+  addDecorToRoom(room,room.condition==='battle'?'rubble':'chest',room.w-1,0,Math.PI/4,.85,1);
+  buildWorld();constructionBurst(room);if(preferences.autosave)save(true);toast('Room dressed');
+}
+function buildHeroRoom(){
+  let spot=null;for(let z=-12;z<=12&&!spot;z++)for(let x=-12;x<=12;x++){const test={x,z,w:6,d:8};if(isValidRect(test)){spot=test;break;}}
+  if(!spot){toast('No space for a 6 × 8 throne hall');return;}
+  const room={...spot,id:state.nextId++,condition:'pristine',preset:'throne'};state.rooms.push(room);state.selected=room.id;state.selectedDecor=null;
+  for(const [type,rx,rz,rot,scale,variant] of [
+    ['statue',0,1,0,1.25,0],['statue',5,1,0,1.25,1],['statue',0,6,Math.PI,1.25,2],['statue',5,6,Math.PI,1.25,0],
+    ['brazier',1,1,0,1.05,0],['brazier',4,1,0,1.05,0],['brazier',1,6,0,1.05,0],['brazier',4,6,0,1.05,0],
+    ['table',2,5,0,1.18,1],['banner',1,0,0,1.1,0],['banner',4,0,0,1.1,1],['chest',2,1,0,1,2]
+  ])addDecorToRoom(room,type,rx,rz,rot,scale,variant);
+  buildWorld();constructionBurst(room);cam.target.set((room.x+room.w/2)*CELL,0,(room.z+room.d/2)*CELL);cam.distance=25;updateBuildCamera();if(preferences.autosave)save(true);toast('Throne hall raised');
 }
 
 const tutorialSteps = [
@@ -361,6 +431,8 @@ document.querySelector('#scaleDownBtn').onclick=()=>editDecor(d=>d.scale=Math.ma
 document.querySelector('#scaleUpBtn').onclick=()=>editDecor(d=>d.scale=Math.min(1.4,(d.scale||1)+.1),'Decoration resized');
 document.querySelector('#variantBtn').onclick=()=>editDecor(d=>d.variant=((d.variant||0)+1)%3,'Decoration varied');
 document.querySelector('#duplicateBtn').onclick=()=>{const d=state.decorations.find(x=>x.id===state.selectedDecor);if(!d)return;const copy={...d,id:state.nextDecorId++,rotation:(d.rotation||0)+Math.PI/12};state.decorations.push(copy);state.selectedDecor=copy.id;buildWorld();if(preferences.autosave)save(true);toast('Decoration duplicated');};
+document.querySelector('#conditionSelect').onchange=e=>{const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;r.condition=e.target.value;buildWorld();if(preferences.autosave)save(true);toast(`${e.target.options[e.target.selectedIndex].text} room applied`);};
+document.querySelector('#dressRoomBtn').onclick=dressRoom;document.querySelector('#heroRoomBtn').onclick=buildHeroRoom;
 const help=document.querySelector('#help'),settings=document.querySelector('#settings');
 document.querySelector('#helpBtn').onclick=()=>help.classList.remove('hidden');document.querySelector('#closeHelp').onclick=()=>help.classList.add('hidden');document.querySelector('#startTutorialFromHelp').onclick=startTutorial;
 document.querySelector('#newGameBtn').onclick=startNewDungeon;document.querySelector('#tutorialBtn').onclick=startTutorial;
@@ -376,7 +448,10 @@ addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);for(cons
 
 const clock=new THREE.Clock();
 function tick(){
-  const dt=Math.min(clock.getDelta(),.04),speed=(state.mode==='build'?12:4)*(preferences.speed/100);
+  const dt=Math.min(clock.getDelta(),.04),elapsed=clock.elapsedTime,speed=(state.mode==='build'?12:4)*(preferences.speed/100);
+  for(const flame of animatedFlames){const pulse=1+Math.sin(elapsed*9+(flame.userData.phase||0))*.08;flame.scale.y=(flame.material===mats.ghost?1:1.7)*pulse;flame.position.y+=Math.sin(elapsed*1.7+(flame.userData.phase||0))*.0007;}
+  for(const motes of floatingMotes){motes.rotation.y=elapsed*.008;const a=motes.geometry.attributes.position;for(let i=1;i<a.array.length;i+=3){a.array[i]+=.06*dt;if(a.array[i]>8)a.array[i]=.2;}a.needsUpdate=true;}
+  for(const p of [...effectsGroup.children]){p.userData.life-=dt;p.position.addScaledVector(p.userData.velocity,dt);p.userData.velocity.y-=3.2*dt;p.rotation.x+=dt*5;p.rotation.z+=dt*3;p.material.transparent=true;p.material.opacity=Math.max(0,p.userData.life);if(p.userData.life<=0)effectsGroup.remove(p);}
   if(state.mode==='build'){
     const forward=new THREE.Vector3(-Math.sin(cam.yaw),0,-Math.cos(cam.yaw)),right=new THREE.Vector3(forward.z,0,-forward.x),move=new THREE.Vector3();
     if(keys.has('KeyW')||keys.has('ArrowUp'))move.add(forward);if(keys.has('KeyS')||keys.has('ArrowDown'))move.sub(forward);if(keys.has('KeyD')||keys.has('ArrowRight'))move.add(right);if(keys.has('KeyA')||keys.has('ArrowLeft'))move.sub(right);

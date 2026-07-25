@@ -60,6 +60,10 @@ export function makeThemeMaterials(theme) {
   result.floor.map=stoneTexture('floor');result.floor.needsUpdate=true;
   result.floorAlt.map=result.floor.map;result.floorAlt.needsUpdate=true;
   result.wall.map=stoneTexture('wall');result.wall.needsUpdate=true;
+  new THREE.TextureLoader().load('/textures/stonekeep-masonry.png',texture=>{
+    texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(2.2,1.25);texture.anisotropy=8;
+    result.wall.map=texture;result.wall.needsUpdate=true;
+  });
   // Texture maps multiply with material color; these neutral tints keep masonry
   // readable in torchlight without making the dungeon feel washed out.
   result.floor.color.set(0xa4a49b);result.floorAlt.color.set(0x898c86);result.wall.color.set(0x969a94);
@@ -68,6 +72,9 @@ export function makeThemeMaterials(theme) {
   result.banner=new THREE.MeshStandardMaterial({color:theme.props.bannerColor,roughness:.9,side:THREE.DoubleSide});
   result.rug=new THREE.MeshStandardMaterial({color:theme.props.rugColor,roughness:1});
   result.leather=new THREE.MeshStandardMaterial({color:0x241812,roughness:.88});
+  result.moss=new THREE.MeshStandardMaterial({color:0x31442d,roughness:1});
+  result.ghost=new THREE.MeshStandardMaterial({color:0x79bbbd,emissive:0x3d9a9d,emissiveIntensity:1.8,transparent:true,opacity:.68});
+  result.soot=new THREE.MeshStandardMaterial({color:0x171817,roughness:1,transparent:true,opacity:.74});
   result.previewValid = new THREE.MeshBasicMaterial({ color: 0x50c792, transparent: true, opacity: 0.38, depthWrite: false });
   result.previewInvalid = new THREE.MeshBasicMaterial({ color: 0xd24e43, transparent: true, opacity: 0.42, depthWrite: false });
   result.selected = new THREE.MeshBasicMaterial({ color: 0xd9b35f, transparent: true, opacity: 0.18, depthWrite: false });
