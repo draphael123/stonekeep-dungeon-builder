@@ -7,7 +7,7 @@ const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
 const roadMaterial=new THREE.MeshStandardMaterial({color:0x5a4b36,roughness:1,metalness:0});
 const roadEdgeMaterial=new THREE.MeshStandardMaterial({color:0x71634d,roughness:.95});
-const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'cottage', layer:'surface', mode: 'build', progressionTier:1, dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:180, food:60, timeScale:1, simTime:0, simAccumulator:0 };
+const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'cottage', layer:'surface', mode: 'build', progressionTier:1, choosingExploreStart:false, exploreStart:null, dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:180, food:60, timeScale:1, simTime:0, simAccumulator:0 };
 const ROOM_TYPES={
   unassigned:{name:'Unassigned Chamber',cost:5,purpose:'A flexible chamber with no production. Assign its purpose later.',needs:'No furnishing requirement'},
   treasury:{name:'Treasury',cost:6,purpose:'Stores more gold and generates income while operational.',needs:'Requires a chest or gold pile'},
@@ -436,6 +436,12 @@ renderer.domElement.addEventListener('pointerdown',e=>{
   if(e.button===2){rightDrag=true;return}
   if(e.button===0){
     renderer.domElement.setPointerCapture?.(e.pointerId);
+    if(state.choosingExploreStart){
+      const c=pointerCell(e),roomId=c?occupiedMap().get(cellKey(c.x,c.z)):null;
+      if(roomId!=null){state.exploreStart=c;state.choosingExploreStart=false;document.querySelector('#exploreMode').textContent='EXPLORE';setMode('explore');}
+      else toast('Choose a built floor, road, or room');
+      return;
+    }
     if(state.tool!=='room'){
       const c=pointerCell(e),roomId=c?occupiedMap().get(cellKey(c.x,c.z)):null;
       if(roomId!=null){
@@ -486,11 +492,15 @@ function setMode(mode){
   document.querySelector('#buildMode').classList.toggle('active',mode==='build');document.querySelector('#exploreMode').classList.toggle('active',mode==='explore');
   document.querySelector('.palette').style.display=mode==='build'?'block':'none';document.querySelector('.inspector').style.display=mode==='build'?'block':'none';document.querySelector('#crosshair').style.display=mode==='explore'?'block':'none';
   document.querySelector('#hint').textContent=mode==='build'?'LMB DRAG Place room · RMB DRAG Rotate view · WASD/ARROWS Pan · WHEEL Zoom':'CLICK Capture mouse · WASD Move · MOUSE Look · ESC Release · B Return to build';
-  if(mode==='explore'&&state.rooms.length){const r=state.rooms.find(x=>x.id===state.selected)||state.rooms[0];exploreCamera.position.set((r.x+r.w/2)*CELL,1.65,(r.z+r.d/2)*CELL);exploreYaw=r.d>=r.w?Math.PI:Math.PI/2;explorePitch=-.04;}
+  if(mode==='explore'&&state.rooms.length){const active=state.rooms.filter(r=>(r.layer||'underground')===state.layer),r=active.find(x=>x.id===state.selected)||active[0],start=state.exploreStart||roomCenterCell(r);exploreCamera.position.set((start.x+.5)*CELL,1.65,(start.z+.5)*CELL);exploreYaw=r.d>=r.w?Math.PI:Math.PI/2;explorePitch=-.04;state.exploreStart=null;}
   if(mode==='build'&&document.pointerLockElement)document.exitPointerLock();
   world.traverse(o=>{if(o.userData.ceiling)o.visible=mode==='explore';});
   world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=mode==='explore'||o.userData.roomId!==state.selected;});
   toast(mode==='build'?'Build mode':'Explore mode — click to look');
+}
+function chooseExploreStart(){
+  if(!state.rooms.some(r=>(r.layer||'underground')===state.layer)){toast('Build something before exploring');return;}
+  setMode('build');state.choosingExploreStart=true;document.querySelector('#exploreMode').textContent='PICK A START';document.querySelector('#hint').textContent='CLICK a built floor, road, or room to begin exploring there';toast('Choose your exploration starting point');
 }
 function setLayer(layer){
   if(layer==='underground'&&getProgression().tier<4){toast('Grow to a village before excavating underground');return;}
@@ -587,7 +597,7 @@ const tutorialSteps = [
   { target:'.resource-bar', kicker:'STEP THREE · PROVIDE', title:'Watch gold, food, and workers.', body:'Every building costs gold. Farms replenish food, while later workshops and storehouses strengthen the settlement economy. Start compactly so resources last.' },
   { target:'.inspector', kicker:'STEP FOUR · GROW', title:'Complete milestones to unlock more.', body:'A cottage and farm advance the camp into a hamlet. Each new stage reveals only the buildings and management tools that now matter.' },
   { target:'.layer-switch', kicker:'STEP FIVE · DELVE LATER', title:'The underground is earned.', body:'Underground construction stays locked while your settlement is fragile. Establish production and grow into a village; then the first dungeon chamber can be excavated.' },
-  { target:'.mode-switch', kicker:'STEP SIX · WALK THE SETTLEMENT', title:'Explore what you have built.', body:'Choose Explore to walk through buildings and roads. Click the world to look around, move with WASD, and press B to return to Build mode.' },
+  { target:'.mode-switch', kicker:'STEP SIX · WALK THE SETTLEMENT', title:'Choose exactly where exploration begins.', body:'Choose Explore, then click any built floor, road, or room as your starting point. Click again to capture the mouse, move with WASD, and press B to return to Build mode.' },
   { target:'.actions', kicker:'STEP SEVEN · KEEP YOUR PROGRESS', title:'Save the whole stronghold.', body:'Save preserves the surface, underground, resources, furnishings, and growth stage in this browser. Continue returns to that same settlement.' },
   { target:'.inspector', kicker:'YOUR FIRST TASK', title:'Raise the Great Hall.', body:'Build it at least 3 by 3 tiles. Select a finished building to remove its roof and furnish the interior; deselect it to restore the complete exterior.' }
 ];
@@ -620,7 +630,7 @@ function selectTool(tool){
 function selectRoomType(role){
   state.buildRole=role;selectTool('room');const type=ROOM_TYPES[role],panel=document.querySelector('#buildPurpose');panel.querySelector('b').textContent=type.name.toUpperCase();panel.querySelector('span').textContent=`${type.cost} gold per tile · ${type.needs}`;panel.querySelector('p').textContent=type.purpose;
 }
-document.querySelector('#buildMode').onclick=()=>setMode('build');document.querySelector('#exploreMode').onclick=()=>setMode('explore');
+document.querySelector('#buildMode').onclick=()=>{state.choosingExploreStart=false;document.querySelector('#exploreMode').textContent='EXPLORE';setMode('build');};document.querySelector('#exploreMode').onclick=chooseExploreStart;
 document.querySelector('#surfaceLayer').onclick=()=>setLayer('surface');document.querySelector('#undergroundLayer').onclick=()=>setLayer('underground');
 document.querySelector('#deleteBtn').onclick=deleteSelected;document.querySelector('#rotateBtn').onclick=rotateSelected;document.querySelector('#saveBtn').onclick=save;document.querySelector('#loadBtn').onclick=load;
 document.querySelector('#rotateFineBtn').onclick=()=>editDecor(d=>d.rotation=(d.rotation||0)+Math.PI/12,'Turned 15°');
