@@ -16,7 +16,7 @@
       </div>
       <div class="layer-switch">
         <button id="surfaceLayer" class="active">☀ SURFACE</button>
-        <button id="undergroundLayer">◆ UNDERGROUND</button>
+        <button id="undergroundLayer">◆ UNDERGROUND <small id="undergroundLock">LOCKED</small></button>
       </div>
       <div class="resource-bar" aria-label="Dungeon resources">
         <span class="gold-resource">◆ <b id="goldValue">500</b><small>GOLD</small></span>
@@ -52,14 +52,13 @@
         <button class="room-type" data-room-role="shrine"><span>✦</span><b>Dark shrine</b><small>Generates influence</small></button>
       </div>
       <div id="surfaceBlueprints" class="room-type-grid hidden">
-        <button class="room-type active" data-room-role="hall"><span>♜</span><b>Great hall</b><small>Settlement center</small></button>
-        <button class="room-type" data-room-role="cottage"><span>⌂</span><b>Cottage</b><small>Houses residents</small></button>
-        <button class="room-type" data-room-role="forge"><span>⚒</span><b>Forge</b><small>Produces tools</small></button>
-        <button class="room-type" data-room-role="farm"><span>♨</span><b>Farm plot</b><small>Produces food</small></button>
-        <button class="room-type" data-room-role="storehouse"><span>▣</span><b>Storehouse</b><small>Stores materials</small></button>
-        <button class="room-type" data-room-role="lumberyard"><span>♠</span><b>Lumber yard</b><small>Processes timber</small></button>
-        <button class="room-type" data-room-role="road"><span>═</span><b>Road</b><small>Connects buildings</small></button>
-        <button class="room-type" data-room-role="watchtower"><span>♜</span><b>Watchtower</b><small>Guards the border</small></button>
+        <button class="room-type" data-room-role="cottage" data-tier="1"><span>⌂</span><b>Cottage</b><small>Houses residents</small></button>
+        <button class="room-type" data-room-role="farm" data-tier="1"><span>♨</span><b>Farm plot</b><small>Produces food</small></button>
+        <button class="room-type" data-room-role="road" data-tier="1"><span>═</span><b>Road</b><small>Connects buildings</small></button>
+        <button class="room-type" data-room-role="lumberyard" data-tier="2"><span>♠</span><b>Lumber yard</b><small>Processes timber</small></button>
+        <button class="room-type" data-room-role="storehouse" data-tier="2"><span>▣</span><b>Storehouse</b><small>Stores materials</small></button>
+        <button class="room-type" data-room-role="forge" data-tier="3"><span>⚒</span><b>Forge</b><small>Produces tools</small></button>
+        <button class="room-type" data-room-role="watchtower" data-tier="4"><span>♜</span><b>Watchtower</b><small>Guards the border</small></button>
       </div>
       <div id="buildPurpose" class="build-purpose"><b>UNASSIGNED CHAMBER</b><span>5 gold per tile</span><p>A flexible chamber with no production. Assign its purpose later.</p></div>
       <div class="divider"></div>
@@ -138,7 +137,14 @@
       </div>
     </aside>
     <section class="inspector">
-      <p class="eyebrow">DUNGEON LEDGER</p>
+      <div class="progress-card">
+        <p class="eyebrow">SETTLEMENT GROWTH</p>
+        <div class="stage-row"><strong id="stageName">I · CAMP</strong><span id="stageCount">1 / 4</span></div>
+        <div class="stage-track"><i id="stageProgress"></i></div>
+        <b id="nextGoal">Build a cottage</b>
+        <small id="unlockReward">Next: work buildings</small>
+      </div>
+      <p class="eyebrow">OUTPOST LEDGER</p>
       <div><span>Rooms</span><strong id="roomCount">0</strong></div>
       <div><span>Floor area</span><strong id="tileCount">0 tiles</strong></div>
       <div><span>Decorations</span><strong id="decorCount">0</strong></div>
@@ -161,7 +167,7 @@
         <h1>STONEKEEP</h1>
         <p class="menu-subtitle">Found a living settlement. Raise a castle above it.<br />Delve into the dungeon beneath.</p>
         <div class="menu-actions">
-          <button id="newGameBtn" class="menu-primary">NEW DUNGEON <span>›</span></button>
+          <button id="newGameBtn" class="menu-primary">FOUND A SMALL OUTPOST <span>›</span></button>
           <button id="continueBtn">CONTINUE <span>›</span></button>
           <button id="tutorialBtn">GUIDED TUTORIAL <span>›</span></button>
           <button id="menuSettingsBtn">SETTINGS <span>›</span></button>
