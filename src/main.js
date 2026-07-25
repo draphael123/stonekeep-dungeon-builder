@@ -5,6 +5,8 @@ import { THEMES, makeThemeMaterials } from './themes.js';
 const CELL = 2, WALL_H = 2.8, WALL_T = .24;
 const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
+const roadMaterial=new THREE.MeshStandardMaterial({color:0x5a4b36,roughness:1,metalness:0});
+const roadEdgeMaterial=new THREE.MeshStandardMaterial({color:0x71634d,roughness:.95});
 const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'cottage', layer:'surface', mode: 'build', progressionTier:1, dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:180, food:60, timeScale:1, simTime:0, simAccumulator:0 };
 const ROOM_TYPES={
   unassigned:{name:'Unassigned Chamber',cost:5,purpose:'A flexible chamber with no production. Assign its purpose later.',needs:'No furnishing requirement'},
@@ -146,7 +148,11 @@ function addCeiling(group,room){
 }
 function addSurfaceBuilding(group,room){
   const cx=(room.x+room.w/2)*CELL,cz=(room.z+room.d/2)*CELL,w=room.w*CELL-.18,d=room.d*CELL-.18;
-  if(room.role==='road'){addBox(group,[w,.08,d],[cx,.02,cz],mats.wallTop,false);return;}
+  if(room.role==='road'){
+    addBox(group,[room.w*CELL+.08,.055,room.d*CELL+.08],[cx,.005,cz],roadMaterial,false);
+    for(let i=0;i<Math.max(2,room.w*room.d*2);i++){const pebble=addCylinder(group,.035+(i%3)*.018,.018,[room.x*CELL+.25+(i*.83%(room.w*CELL-.5)),.045,room.z*CELL+.25+(i*1.17%(room.d*CELL-.5))],roadEdgeMaterial,7);pebble.scale.z=1.7;}
+    return;
+  }
   if(room.role==='farm'){
     addBox(group,[w,.07,d],[cx,.01,cz],mats.wood,false);for(let z=room.z+.35;z<room.z+room.d;z+=.55)for(let x=room.x+.3;x<room.x+room.w;x+=.5)addCylinder(group,.035,.28,[x*CELL,.18,z*CELL],mats.moss,5);return;
   }
@@ -156,9 +162,9 @@ function addSurfaceBuilding(group,room){
   const wallMat=room.role==='forge'?mats.wall:mats.wood;
   addBox(group,[w,wallH,.18],[cx,wallH/2,room.z*CELL+.1],wallMat);addBox(group,[.18,wallH,d],[room.x*CELL+.1,wallH/2,cz],wallMat);addBox(group,[.18,wallH,d],[(room.x+room.w)*CELL-.1,wallH/2,cz],wallMat);
   const doorway=1.35,sideW=Math.max(.3,(w-doorway)/2);addBox(group,[sideW,wallH,.18],[cx-(doorway+sideW)/2,wallH/2,(room.z+room.d)*CELL-.1],wallMat);addBox(group,[sideW,wallH,.18],[cx+(doorway+sideW)/2,wallH/2,(room.z+room.d)*CELL-.1],wallMat);addBox(group,[doorway,.48,.18],[cx,wallH-.24,(room.z+room.d)*CELL-.1],wallMat);
-  const roof=new THREE.Group();roof.userData.surfaceRoof=true;const roofMat=room.role==='hall'?mats.banner:mats.rug;
+  const roof=new THREE.Group();roof.userData.surfaceRoof=true;roof.userData.roomId=room.id;const roofMat=room.role==='hall'?mats.banner:mats.rug;
   const left=addBox(roof,[w*.58,.16,d+.35],[cx-w*.22,wallH+.38,cz],roofMat);left.rotation.z=.52;const right=addBox(roof,[w*.58,.16,d+.35],[cx+w*.22,wallH+.38,cz],roofMat);right.rotation.z=-.52;
-  roof.visible=state.mode==='explore';group.add(roof);
+  roof.visible=state.mode==='explore'||state.selected!==room.id;group.add(roof);
   if(room.role==='forge'){const chimney=addBox(group,[.48,wallH+1,.48],[cx+w*.28,(wallH+1)/2,cz+d*.25],mats.wallTop);const glow=new THREE.PointLight(0xff7428,4,10,2);glow.userData.baseIntensity=4;glow.position.set(cx,1,cz);group.add(glow);}
   if(room.role==='storehouse')for(let i=0;i<4;i++)addBox(group,[.65,.65,.65],[cx+(i%2-.5)*.8,.42,cz+(Math.floor(i/2)-.5)*.8],mats.wood);
   if(room.role==='watchtower'){const top=addBox(group,[w+.5,.22,d+.5],[cx,wallH+.05,cz],mats.wallTop);for(const [x,z] of [[cx-w/2,cz-d/2],[cx+w/2,cz-d/2],[cx-w/2,cz+d/2],[cx+w/2,cz+d/2]])addBox(group,[.35,.7,.35],[x,wallH+.45,z],mats.wall);}
@@ -295,8 +301,8 @@ function buildWorld() {
   updateProgression();
 }
 function getProgression(){
-  const surface=state.rooms.filter(r=>r.layer==='surface'),roles=new Set(surface.map(r=>r.role));let tier=1,goal='Build a cottage and a farm',reward='Unlocks lumber yard and storehouse',done=(roles.has('cottage')?1:0)+(roles.has('farm')?1:0),total=2;
-  if(roles.has('cottage')&&roles.has('farm')){tier=2;goal='Build a lumber yard and storehouse';reward='Unlocks the forge';done=(roles.has('lumberyard')?1:0)+(roles.has('storehouse')?1:0);}
+  const surface=state.rooms.filter(r=>r.layer==='surface'),roles=new Set(surface.map(r=>r.role));let tier=1,goal=roles.has('hall')?'Build a cottage and a farm':'Build a Great Hall to found the settlement',reward=roles.has('hall')?'Unlocks lumber yard and storehouse':'Establishes your founding camp',done=roles.has('hall')?((roles.has('cottage')?1:0)+(roles.has('farm')?1:0)):0,total=roles.has('hall')?2:1;
+  if(roles.has('hall')&&roles.has('cottage')&&roles.has('farm')){tier=2;goal='Build a lumber yard and storehouse';reward='Unlocks the forge';done=(roles.has('lumberyard')?1:0)+(roles.has('storehouse')?1:0);}
   if(roles.has('lumberyard')&&roles.has('storehouse')){tier=3;goal='Build a forge and grow to 6 buildings';reward='Unlocks underground building and decorations';done=Math.min(2,(roles.has('forge')?1:0)+(surface.length>=6?1:0));}
   if(roles.has('forge')&&surface.length>=6){tier=4;goal='Build a watchtower';reward='Your village becomes a fortified keep';done=roles.has('watchtower')?1:0;total=1;}
   if(roles.has('watchtower')){tier=5;goal='Expand freely above and below';reward='All current blueprints unlocked';done=1;total=1;}
@@ -315,7 +321,7 @@ function constructionBurst(room){
 }
 function updatePreview() {
   previewGroup.clear(); if(!state.dragStart||!state.dragEnd)return;
-  const r=normalizeRect(state.dragStart,state.dragEnd),type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost; state.previewValid=isValidRect(r)&&state.gold>=cost;
+  const r=normalizeRect(state.dragStart,state.dragEnd),type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost,minValid=state.buildRole!=='hall'||(r.w>=3&&r.d>=3); state.previewValid=isValidRect(r)&&state.gold>=cost&&minValid;
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(r.w*CELL-.08,.14,r.d*CELL-.08),state.previewValid?mats.previewValid:mats.previewInvalid);
   mesh.position.set((r.x+r.w/2)*CELL,.18,(r.z+r.d/2)*CELL); previewGroup.add(mesh);
   const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:state.previewValid?0x8ff0bc:0xff7a6b}));
@@ -337,9 +343,10 @@ function updateSelection() {
   document.querySelector('#selectionInfo').textContent=d?`${d.type[0].toUpperCase()+d.type.slice(1)} · ${Math.round((d.rotation||0)*180/Math.PI)%360}° · ${Math.round((d.scale||1)*100)}%`:r?`${roomType.name} · ${r.w} × ${r.d} tiles${r.role&&r.role!=='unassigned'?` · ${roomOperational(r)?'Operational':'Inactive'}`:''}. ${roomType.purpose}`:'Choose a room purpose, then drag across the grid.';
   const conditionSelect=document.querySelector('#conditionSelect');conditionSelect.disabled=!r||!!d;if(r)conditionSelect.value=r.condition||'occupied';
   const roleSelect=document.querySelector('#roleSelect');roleSelect.disabled=!r||!!d||r?.role==='heart'||state.layer==='surface';if(r&&ROOM_TYPES[r.role])roleSelect.value=r.role||'unassigned';
-  document.querySelector('#dressRoomBtn').disabled=!r||!!d||r?.role==='heart'||state.layer==='surface';
+  document.querySelector('#dressRoomBtn').disabled=!r||!!d||r?.role==='heart'||r?.role==='road'||r?.role==='farm'||r?.role==='lumberyard';
   document.querySelector('#doorBtn').disabled=!r||!!d||state.layer==='surface';document.querySelector('#pathTestBtn').disabled=!r||!!d;
   document.querySelector('#doorBtn span:nth-child(2)').textContent=r?.doorsOpen===false?'Open room doors':'Close room doors';
+  world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=state.mode==='explore'||o.userData.roomId!==r?.id;});
 }
 function updateHUD(){const activeRooms=state.rooms.filter(r=>(r.layer||'underground')===state.layer);document.querySelector('#roomCount').textContent=activeRooms.length;const n=activeRooms.reduce((s,r)=>s+r.w*r.d,0);document.querySelector('#tileCount').textContent=`${n} tile${n===1?'':'s'}`;document.querySelector('#decorCount').textContent=state.decorations.filter(d=>activeRooms.some(r=>r.id===d.roomId)).length;document.querySelector('#operationalCount').textContent=activeRooms.filter(roomOperational).length;updateSimHUD();}
 function updateSimHUD(){
@@ -470,7 +477,7 @@ function setMode(mode){
   if(mode==='explore'&&state.rooms.length){const r=state.rooms.find(x=>x.id===state.selected)||state.rooms[0];exploreCamera.position.set((r.x+r.w/2)*CELL,1.65,(r.z+r.d/2)*CELL);exploreYaw=r.d>=r.w?Math.PI:Math.PI/2;explorePitch=-.04;}
   if(mode==='build'&&document.pointerLockElement)document.exitPointerLock();
   world.traverse(o=>{if(o.userData.ceiling)o.visible=mode==='explore';});
-  world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=mode==='explore';});
+  world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=mode==='explore'||o.userData.roomId!==state.selected;});
   toast(mode==='build'?'Build mode':'Explore mode — click to look');
 }
 function setLayer(layer){
@@ -561,14 +568,14 @@ function buildHeroRoom(){
 
 const tutorialSteps = [
   { target:'.inspector', kicker:'WELCOME · FOUNDING CAMP', title:'Begin with one achievable goal.', body:'You are founding a settlement, not managing a finished dungeon. The Growth panel always shows what to build next and what completing it will unlock.' },
-  { target:'#surfaceBlueprints', kicker:'STEP ONE · FIRST HOMES', title:'Build a cottage and farm.', body:'Only the essentials are available at first. Choose Cottage or Farm, then drag a small footprint across empty ground. Roads can connect the settlement as it grows.' },
+  { target:'#surfaceBlueprints', kicker:'STEP ONE · FOUND THE CAMP', title:'Build the Great Hall first.', body:'You begin with open land. Choose Great Hall and drag at least a 3 by 3 footprint. This becomes the settlement center; then add a cottage, farm, and connected packed-earth roads.' },
   { target:null, kicker:'STEP TWO · PLACE A BUILDING', title:'Drag on the surface grid.', body:'Hold the left mouse button and drag over a few tiles. Green means the footprint can be built and afforded; red means it overlaps something or costs too much.' },
   { target:'.resource-bar', kicker:'STEP THREE · PROVIDE', title:'Watch gold, food, and workers.', body:'Every building costs gold. Farms replenish food, while later workshops and storehouses strengthen the settlement economy. Start compactly so resources last.' },
   { target:'.inspector', kicker:'STEP FOUR · GROW', title:'Complete milestones to unlock more.', body:'A cottage and farm advance the camp into a hamlet. Each new stage reveals only the buildings and management tools that now matter.' },
   { target:'.layer-switch', kicker:'STEP FIVE · DELVE LATER', title:'The underground is earned.', body:'Underground construction stays locked while your settlement is fragile. Establish production and grow into a village; then the first dungeon chamber can be excavated.' },
   { target:'.mode-switch', kicker:'STEP SIX · WALK THE SETTLEMENT', title:'Explore what you have built.', body:'Choose Explore to walk through buildings and roads. Click the world to look around, move with WASD, and press B to return to Build mode.' },
   { target:'.actions', kicker:'STEP SEVEN · KEEP YOUR PROGRESS', title:'Save the whole stronghold.', body:'Save preserves the surface, underground, resources, furnishings, and growth stage in this browser. Continue returns to that same settlement.' },
-  { target:'.inspector', kicker:'YOUR FIRST TASK', title:'Build one cottage and one farm.', body:'Keep both buildings small. When they are complete, Stonekeep will announce your new settlement stage and reveal the next pair of useful buildings.' }
+  { target:'.inspector', kicker:'YOUR FIRST TASK', title:'Raise the Great Hall.', body:'Build it at least 3 by 3 tiles. Select a finished building to remove its roof and furnish the interior; deselect it to restore the complete exterior.' }
 ];
 let tutorialIndex=0;
 function showTutorialStep(index) {
@@ -590,7 +597,7 @@ function endTutorial() {
   document.querySelector('#tutorial').classList.add('hidden');document.querySelectorAll('.tutorial-focus').forEach(e=>e.classList.remove('tutorial-focus'));localStorage.setItem('stonekeep-tutorial-complete','true');toast('Tutorial complete — begin building');
 }
 function startNewDungeon() {
-  state.rooms=[{id:1,x:-2,z:-2,w:4,d:3,condition:'pristine',role:'hall',layer:'surface',doorsOpen:true}];state.decorations=[];state.selected=1;state.selectedDecor=null;state.nextId=2;state.nextDecorId=1;state.gold=180;state.food=60;state.progressionTier=1;state.timeScale=1;state.simTime=0;state.showcase=false;state.layer='surface';setLayer('surface');spawnWorkers();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');selectRoomType('cottage');cam.distance=23;updateBuildCamera();toast('A small camp awaits · build a cottage and farm');
+  state.rooms=[];state.decorations=[];state.selected=null;state.selectedDecor=null;state.nextId=1;state.nextDecorId=1;state.gold=260;state.food=60;state.progressionTier=1;state.timeScale=1;state.simTime=0;state.showcase=false;state.layer='surface';setLayer('surface');document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');selectRoomType('hall');cam.target.set(0,0,0);cam.distance=23;updateBuildCamera();toast('Open land awaits · build a Great Hall');
 }
 function selectTool(tool){
   state.tool=tool;document.querySelectorAll('.room-type').forEach(b=>b.classList.toggle('active',tool==='room'&&b.dataset.roomRole===state.buildRole));document.querySelectorAll('.decor-tool').forEach(b=>b.classList.toggle('active',b.dataset.decor===tool));
