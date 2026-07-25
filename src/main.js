@@ -98,24 +98,48 @@ const birds=[],clouds=[],butterflies=[];let rain;
 const terrainColliders=[];
 const keeper=new THREE.Group();const keeperBody=addCylinder(keeper,.22,.82,[0,.52,0],mats.leather,10);const keeperHead=new THREE.Mesh(new THREE.SphereGeometry(.18,10,8),mats.brass);keeperHead.position.y=1.02;keeper.add(keeperHead);const keeperLight=new THREE.PointLight(0xffa34d,1.8,5,2);keeperLight.position.y=1.25;keeper.add(keeperLight);keeper.visible=false;scene.add(keeper);
 const workers=[];
+const VILLAGER_STYLES=[
+  {name:'Mara',profession:'Farmer',trait:'Sociable',habit:'Visits the well at dusk',skin:0xd6a27d,hair:0x6f4a2c,tunic:0x687c4b,vest:0xb69a5f,accent:0xd7bd72,hat:'straw',tool:'hoe',cargo:'basket',scale:1.12},
+  {name:'Tomas',profession:'Builder',trait:'Industrious',habit:'Starts work before sunrise',skin:0xc58b67,hair:0x3c251c,tunic:0x596d79,vest:0x75503b,accent:0xb9a17a,hat:'cap',tool:'hammer',cargo:'timber',scale:1.18},
+  {name:'Elowen',profession:'Herbalist',trait:'Observant',habit:'Gathers herbs after rain',skin:0xe0b28d,hair:0x9b6b35,tunic:0x526b58,vest:0x7e5967,accent:0xa9c482,hat:'hood',tool:'sickle',cargo:'herbs',scale:1.08},
+  {name:'Bran',profession:'Smith',trait:'Steadfast',habit:'Tends the forge before supper',skin:0x9b684d,hair:0x211b18,tunic:0x5b5550,vest:0x3a302b,accent:0xb66b42,hat:'band',tool:'mallet',cargo:'ore',scale:1.22}
+];
+function villagerMaterial(color,roughness=.92){return new THREE.MeshStandardMaterial({color,roughness,metalness:0});}
 function makeWorker(index){
-  const g=new THREE.Group(),skin=new THREE.MeshStandardMaterial({color:index?0xc58b67:0xd6a27d,roughness:.9}),hair=new THREE.MeshStandardMaterial({color:index?0x4a2d20:0x80603c,roughness:1}),cloth=new THREE.MeshStandardMaterial({color:index?0x526742:0x7b493b,roughness:1}),shirt=new THREE.MeshStandardMaterial({color:index?0xb59b6c:0x5d7180,roughness:1}),boot=new THREE.MeshStandardMaterial({color:0x30251f,roughness:1});
-  const torso=addBox(g,[.4,.5,.24],[0,.68,0],cloth),shirtFront=addBox(g,[.32,.24,.255],[0,.78,-.005],shirt,false);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.18,12,9),skin);head.position.y=1.08;head.castShadow=true;g.add(head);
-  const hairCap=new THREE.Mesh(new THREE.SphereGeometry(.185,12,7,0,Math.PI*2,0,Math.PI*.48),hair);hairCap.position.y=1.12;g.add(hairCap);
-  const nose=new THREE.Mesh(new THREE.SphereGeometry(.035,7,5),skin);nose.position.set(0,1.08,-.17);g.add(nose);
-  for(const x of [-.07,.07]){const eye=new THREE.Mesh(new THREE.SphereGeometry(.014,6,4),mats.soot);eye.position.set(x,1.12,-.166);g.add(eye);}
-  const leftArm=new THREE.Group(),rightArm=new THREE.Group();leftArm.position.set(-.25,.86,0);rightArm.position.set(.25,.86,0);g.add(leftArm,rightArm);
-  addCylinder(leftArm,.055,.46,[0,-.2,0],shirt,7);addCylinder(rightArm,.055,.46,[0,-.2,0],shirt,7);addCylinder(leftArm,.06,.12,[0,-.46,0],skin,7);addCylinder(rightArm,.06,.12,[0,-.46,0],skin,7);
-  const leftLeg=new THREE.Group(),rightLeg=new THREE.Group();leftLeg.position.set(-.1,.46,0);rightLeg.position.set(.1,.46,0);g.add(leftLeg,rightLeg);
-  addCylinder(leftLeg,.065,.4,[0,-.2,0],cloth,7);addCylinder(rightLeg,.065,.4,[0,-.2,0],cloth,7);addBox(leftLeg,[.13,.1,.22],[0,-.42,-.04],boot);addBox(rightLeg,[.13,.1,.22],[0,-.42,-.04],boot);
-  if(index===0){const hat=addCylinder(g,.23,.045,[0,1.25,0],hair,12);addCylinder(g,.14,.16,[0,1.34,0],hair,10);}
-  else{addBox(g,[.34,.42,.05],[0,.69,-.15],new THREE.MeshStandardMaterial({color:0xd1bd8e,roughness:1}),false);const pouch=addBox(g,[.17,.18,.1],[.22,.5,.12],mats.leather);}
-  const tool=new THREE.Group();rightArm.add(tool);tool.position.set(0,-.52,0);addCylinder(tool,.025,.48,[0,-.16,0],mats.wood,6);addBox(tool,[.28,.08,.08],[0,-.39,0],index?mats.wallTop:mats.wood);tool.visible=false;const carried=addBox(g,[.34,.3,.28],[0,.52,-.3],index?mats.wood:cropMaterial);carried.visible=false;
-  const identity=index===0?{name:'Mara',profession:'Farmer',trait:'Sociable',habit:'Visits the well at dusk'}:{name:'Tomas',profession:'Builder',trait:'Industrious',habit:'Starts work before sunrise'};
-  g.scale.setScalar(1.18);g.userData={...identity,hunger:100,rest:100,morale:100,path:[],task:'Idle',index,leftArm,rightArm,leftLeg,rightLeg,tool,carried,walkPhase:index*Math.PI};g.visible=false;scene.add(g);workers.push(g);return g;
+  const s=VILLAGER_STYLES[index%VILLAGER_STYLES.length],g=new THREE.Group(),body=new THREE.Group();g.add(body);
+  const skin=villagerMaterial(s.skin,.88),hair=villagerMaterial(s.hair),tunic=villagerMaterial(s.tunic),vest=villagerMaterial(s.vest),accent=villagerMaterial(s.accent),boot=villagerMaterial(0x29201b),white=villagerMaterial(0xe7ddc7),metal=villagerMaterial(0x767879,.58);
+  const torso=addBox(body,[.42,.5,.27],[0,.7,0],tunic),vestFront=addBox(body,[.34,.34,.282],[0,.72,-.006],vest,false);
+  addBox(body,[.055,.36,.29],[-.17,.72,-.012],accent,false);addBox(body,[.055,.36,.29],[.17,.72,-.012],accent,false);
+  addBox(body,[.46,.055,.3],[0,.51,0],mats.leather);const buckle=addBox(body,[.09,.09,.035],[0,.51,-.17],metal,false);
+  const neck=addCylinder(body,.075,.12,[0,1,0],skin,8),headRoot=new THREE.Group();headRoot.position.y=1.1;body.add(headRoot);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.19,14,10),skin);head.scale.set(1,.98,.92);head.castShadow=true;headRoot.add(head);
+  const hairCap=new THREE.Mesh(new THREE.SphereGeometry(.196,14,8,0,Math.PI*2,0,Math.PI*.52),hair);hairCap.position.y=.045;headRoot.add(hairCap);
+  if(index===1||index===3){const beard=new THREE.Mesh(new THREE.SphereGeometry(.145,10,7,0,Math.PI*2,Math.PI*.42,Math.PI*.5),hair);beard.position.set(0,-.065,-.035);beard.scale.set(1,.85,.95);headRoot.add(beard);}
+  const nose=new THREE.Mesh(new THREE.SphereGeometry(.036,7,5),skin);nose.position.set(0,0,-.18);headRoot.add(nose);
+  for(const x of [-.07,.07]){const eye=new THREE.Mesh(new THREE.SphereGeometry(.016,7,5),mats.soot);eye.position.set(x,.04,-.176);headRoot.add(eye);}
+  const mouth=addBox(headRoot,[.07,.012,.012],[0,-.07,-.183],villagerMaterial(0x743f38),false);
+  const leftArm=new THREE.Group(),rightArm=new THREE.Group();leftArm.position.set(-.26,.9,0);rightArm.position.set(.26,.9,0);body.add(leftArm,rightArm);
+  addCylinder(leftArm,.062,.45,[0,-.2,0],tunic,8);addCylinder(rightArm,.062,.45,[0,-.2,0],tunic,8);addCylinder(leftArm,.063,.13,[0,-.46,0],skin,8);addCylinder(rightArm,.063,.13,[0,-.46,0],skin,8);
+  const leftLeg=new THREE.Group(),rightLeg=new THREE.Group();leftLeg.position.set(-.105,.47,0);rightLeg.position.set(.105,.47,0);body.add(leftLeg,rightLeg);
+  addCylinder(leftLeg,.07,.41,[0,-.2,0],vest,8);addCylinder(rightLeg,.07,.41,[0,-.2,0],vest,8);addBox(leftLeg,[.14,.12,.24],[0,-.43,-.045],boot);addBox(rightLeg,[.14,.12,.24],[0,-.43,-.045],boot);
+  if(s.hat==='straw'){addCylinder(headRoot,.27,.04,[0,.2,0],accent,14);addCylinder(headRoot,.145,.13,[0,.275,0],accent,12);}
+  if(s.hat==='cap'){const cap=addBox(headRoot,[.33,.12,.3],[0,.2,0],vest);cap.rotation.z=-.08;addBox(headRoot,[.19,.025,.18],[0,.18,-.19],vest);}
+  if(s.hat==='hood'){const hood=new THREE.Mesh(new THREE.SphereGeometry(.245,12,9,0,Math.PI*2,0,Math.PI*.72),vest);hood.position.y=.025;hood.scale.z=1.05;headRoot.add(hood);head.renderOrder=2;}
+  if(s.hat==='band'){addCylinder(headRoot,.202,.055,[0,.11,0],accent,12);addBox(headRoot,[.08,.3,.035],[.17,-.01,.12],accent);}
+  const tool=new THREE.Group();rightArm.add(tool);tool.position.set(0,-.52,0);addCylinder(tool,.027,.52,[0,-.17,0],mats.wood,7);
+  if(s.tool==='hoe'){const blade=addBox(tool,[.3,.045,.12],[.1,-.42,0],metal);blade.rotation.z=-.18;}
+  if(s.tool==='hammer'||s.tool==='mallet')addBox(tool,[s.tool==='mallet'?.3:.24,.13,.13],[0,-.43,0],s.tool==='mallet'?mats.wood:metal);
+  if(s.tool==='sickle'){const blade=new THREE.Mesh(new THREE.TorusGeometry(.13,.025,5,10,Math.PI),metal);blade.position.set(.08,-.41,0);blade.rotation.z=.5;tool.add(blade);}
+  tool.visible=false;
+  const carried=new THREE.Group();carried.position.set(0,.58,-.31);body.add(carried);
+  if(s.cargo==='basket'){addCylinder(carried,.2,.25,[0,0,0],villagerMaterial(0x9a7040),10);for(let i=0;i<5;i++){const crop=new THREE.Mesh(new THREE.SphereGeometry(.055,7,5),cropMaterial);crop.position.set((i-2)*.055,.16,Math.sin(i)*.06);carried.add(crop);}}
+  if(s.cargo==='timber'){for(let i=0;i<3;i++){const log=addCylinder(carried,.07,.42,[(i-1)*.11,0,0],mats.wood,8);log.rotation.z=Math.PI/2;}}
+  if(s.cargo==='herbs'){for(let i=0;i<6;i++){const herb=addCylinder(carried,.018,.35,[(i-2.5)*.04,0,0],cropMaterial,5);herb.rotation.z=(i-2.5)*.08;}}
+  if(s.cargo==='ore'){for(let i=0;i<4;i++){const ore=new THREE.Mesh(new THREE.DodecahedronGeometry(.1,0),metal);ore.position.set((i%2-.5)*.16,Math.floor(i/2)*.12,0);carried.add(ore);}}
+  carried.visible=false;
+  g.scale.setScalar(s.scale);g.userData={...s,hunger:100,rest:100,morale:100,path:[],task:'Idle',index,leftArm,rightArm,leftLeg,rightLeg,tool,carried,headRoot,body,walkPhase:index*Math.PI};g.visible=false;scene.add(g);workers.push(g);return g;
 }
-makeWorker(0);makeWorker(1);
+VILLAGER_STYLES.forEach((_,i)=>makeWorker(i));
 
 function buildAtmosphere(){
   atmosphereGroup.clear();floatingMotes.length=0;
@@ -624,10 +648,10 @@ function terrainSpeedAt(x,z){const roomId=occupiedMap().get(cellKey(x,z)),role=s
 function canWalkSurface(from,next){for(const r of state.rooms.filter(x=>x.layer==='surface'&&!['road','cobble','boardwalk','farm','fence','well','market','orchard','lumberyard'].includes(x.role))){const minX=r.x*CELL+.25,maxX=(r.x+r.w)*CELL-.25,minZ=r.z*CELL+.25,maxZ=(r.z+r.d)*CELL-.25,inside=p=>p.x>minX&&p.x<maxX&&p.z>minZ&&p.z<maxZ,was=inside(from),will=inside(next),doorX=(r.x+r.w/2)*CELL,south=(r.z+r.d)*CELL;if(will&&!was&&(Math.abs(next.x-doorX)>.68||Math.abs(next.z-south)>.65))return false;if(!will&&was&&(Math.abs(from.x-doorX)>.85||Math.abs(from.z-south)>.85))return false;}return true;}
 function updateWorker(worker,dt){
   const u=worker.userData;u.hunger=Math.max(0,u.hunger-dt*.42*difficulty().hunger);u.rest=Math.max(0,u.rest-dt*(u.trait==='Industrious'?.14:.18));u.morale=Math.max(15,Math.min(100,u.morale+dt*(u.hunger>35?.05:-.18)));
-  const working=u.task?.includes('work');u.tool.visible=working;u.carried.visible=u.path.length>0&&working;
-  if(!u.path.length){u.leftArm.rotation.x*=.82;u.rightArm.rotation.x*=.82;u.leftLeg.rotation.x*=.82;u.rightLeg.rotation.x*=.82;const room=state.rooms.find(r=>r.id===u.targetRoom);if(room?.role==='kitchen'&&state.food>=1&&u.hunger<85){state.food-=1;u.hunger=Math.min(100,u.hunger+28);}if(room?.role==='barracks'||u.task==='Sleeping')u.rest=Math.min(100,u.rest+dt*8);if(u.task?.includes('Socializing'))u.morale=Math.min(100,u.morale+dt*2.2);if(Math.floor(state.simTime+u.index)%4===0)assignWorkerTask(worker);return;}
+  const working=u.task?.includes('work'),breath=Math.sin(state.simTime*2+u.index)*.012;u.tool.visible=working;u.carried.visible=u.path.length>0&&working;u.body.position.y=breath;u.headRoot.rotation.y=Math.sin(state.simTime*.72+u.index*1.7)*.16;
+  if(!u.path.length){const gesture=working?Math.sin(state.simTime*5.5+u.index)*.72:Math.sin(state.simTime*1.4+u.index)*.08;u.leftArm.rotation.x+=(gesture*.35-u.leftArm.rotation.x)*.18;u.rightArm.rotation.x+=((-gesture)-u.rightArm.rotation.x)*.18;u.leftLeg.rotation.x*=.82;u.rightLeg.rotation.x*=.82;u.body.rotation.z=Math.sin(state.simTime*1.1+u.index)*.012;const room=state.rooms.find(r=>r.id===u.targetRoom);if(room?.role==='kitchen'&&state.food>=1&&u.hunger<85){state.food-=1;u.hunger=Math.min(100,u.hunger+28);}if(room?.role==='barracks'||u.task==='Sleeping')u.rest=Math.min(100,u.rest+dt*8);if(u.task?.includes('Socializing')){u.morale=Math.min(100,u.morale+dt*2.2);u.headRoot.rotation.y+=Math.sin(state.simTime*2.2+u.index)*.22;}if(Math.floor(state.simTime+u.index)%4===0)assignWorkerTask(worker);return;}
   const cell=u.path[0],target=new THREE.Vector3((cell.x+.5)*CELL,.08,(cell.z+.5)*CELL),delta=target.clone().sub(worker.position);if(delta.length()<.07)u.path.shift();else{worker.rotation.y=Math.atan2(delta.x,delta.z);worker.position.addScaledVector(delta.normalize(),Math.min(1.75*terrainSpeedAt(cell.x,cell.z)*dt,delta.length()));worker.position.y=.08+Math.abs(Math.sin(state.simTime*7+u.index))*.035;}
-  const swing=Math.sin(state.simTime*8+u.walkPhase)*.55;u.leftArm.rotation.x=swing;u.rightArm.rotation.x=-swing;u.leftLeg.rotation.x=-swing*.65;u.rightLeg.rotation.x=swing*.65;
+  const swing=Math.sin(state.simTime*8+u.walkPhase)*.55;u.leftArm.rotation.x=swing;u.rightArm.rotation.x=-swing;u.leftLeg.rotation.x=-swing*.65;u.rightLeg.rotation.x=swing*.65;u.body.rotation.z=Math.sin(state.simTime*8+u.walkPhase)*.025;
 }
 function simulateStep(){
   const operational=state.rooms.filter(roomOperational),treasuries=operational.filter(r=>r.role==='treasury').length,kitchens=operational.filter(r=>r.role==='kitchen').length,farms=operational.filter(r=>r.role==='farm').length,orchards=operational.filter(r=>r.role==='orchard').length,markets=operational.filter(r=>r.role==='market').length,stores=operational.filter(r=>r.role==='storehouse').length,forges=operational.filter(r=>r.role==='forge').length;
