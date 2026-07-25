@@ -39,7 +39,9 @@ const ROOM_TYPES={
   ,market:{name:'Market Stall',cost:4,purpose:'Creates a lively trading place for residents and future merchants.',needs:'Requires a resident'}
   ,orchard:{name:'Orchard',cost:3,purpose:'Adds fruit production, shade, and cultivated greenery.',needs:'Requires a farmer'}
 };
-const preferences = { quality: 'high', volume: 70, brightness: 125, fog: 55, torch: 110, gridOpacity: 60, fov: 68, speed: 100, sensitivity: 100, showGrid: true, invertLook: false, autosave: true, reduceMotion: false };
+const preferences = { difficulty:'standard', quality: 'high', volume: 70, brightness: 125, fog: 55, torch: 110, gridOpacity: 60, fov: 68, speed: 100, sensitivity: 100, showGrid: true, invertLook: false, autosave: true, reduceMotion: false };
+const DIFFICULTY={relaxed:{name:'Relaxed',gold:420,food:110,cost:.75,hunger:.65,production:1.3},standard:{name:'Standard',gold:260,food:60,cost:1,hunger:1,production:1},hard:{name:'Hard',gold:180,food:40,cost:1.3,hunger:1.35,production:.78}};
+function difficulty(){return DIFFICULTY[preferences.difficulty]||DIFFICULTY.standard;}function buildCost(type,tiles){return Math.max(1,Math.ceil(type.cost*tiles*difficulty().cost));}
 const keys = new Set();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -365,12 +367,12 @@ function constructionBurst(room){
 }
 function updatePreview() {
   previewGroup.clear(); if(!state.dragStart||!state.dragEnd)return;
-  const r=normalizeRect(state.dragStart,state.dragEnd),type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost,minValid=state.buildRole!=='hall'||(r.w>=3&&r.d>=3); state.previewValid=isValidRect(r)&&state.gold>=cost&&minValid;
+  const r=normalizeRect(state.dragStart,state.dragEnd),type=ROOM_TYPES[state.buildRole],cost=buildCost(type,r.w*r.d),minValid=state.buildRole!=='hall'||(r.w>=3&&r.d>=3); state.previewValid=isValidRect(r)&&state.gold>=cost&&minValid;
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(r.w*CELL-.08,.14,r.d*CELL-.08),state.previewValid?mats.previewValid:mats.previewInvalid);
   mesh.position.set((r.x+r.w/2)*CELL,.18,(r.z+r.d/2)*CELL); previewGroup.add(mesh);
   const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:state.previewValid?0x8ff0bc:0xff7a6b}));
   edges.position.copy(mesh.position); previewGroup.add(edges);
-  document.querySelector('#buildPurpose span').textContent=`${cost} gold total · ${type.cost} per tile${state.gold<cost?' · INSUFFICIENT GOLD':''}`;
+  document.querySelector('#buildPurpose span').textContent=`${cost} gold total · ${Math.ceil(type.cost*difficulty().cost)} per tile${state.gold<cost?' · INSUFFICIENT GOLD':''}`;
 }
 function updateSelection() {
   selectionGroup.clear();
@@ -407,6 +409,7 @@ function applyPreferences() {
   sun.castShadow=preferences.quality==='high';
   document.body.classList.toggle('reduce-motion',preferences.reduceMotion);
   document.querySelector('#qualitySetting').value=preferences.quality;
+  document.querySelector('#difficultySetting').value=preferences.difficulty;document.querySelector('#difficultyLabel').textContent=difficulty().name;
   document.querySelector('#volumeSetting').value=preferences.volume;
   document.querySelector('#speedSetting').value=preferences.speed;
   document.querySelector('#motionSetting').checked=preferences.reduceMotion;
@@ -431,6 +434,7 @@ function readPreferences() {
   applyPreferences();
 }
 function savePreferences() {
+  preferences.difficulty=document.querySelector('#difficultySetting').value;
   preferences.quality=document.querySelector('#qualitySetting').value;
   preferences.volume=Number(document.querySelector('#volumeSetting').value);
   preferences.brightness=Number(document.querySelector('#brightnessSetting').value);
@@ -506,8 +510,8 @@ renderer.domElement.addEventListener('pointerup',e=>{
   if(e.button===2){rightDrag=false;return}
   if(e.button===0&&state.mode==='build'&&state.dragStart){
     const r=normalizeRect(state.dragStart,state.dragEnd);
-    if(state.previewValid){const type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost;if(state.gold<cost){toast(`Need ${cost} gold to build this ${type.name.toLowerCase()}`);}else{state.gold-=cost;r.id=state.nextId++;r.condition='occupied';r.role=state.buildRole;r.layer=state.layer;r.doorsOpen=true;state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();if(r.role==='hall'&&r.layer==='surface')spawnWorkers();constructionBurst(r);if(preferences.autosave)save(true);toast(`${type.name} raised · ${cost} gold`);}}
-    else {state.selected=pickRoom(e);updateSelection();if(!state.selected){const type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost;toast(isValidRect(r)&&state.gold<cost?`Need ${cost} gold for this ${type.name.toLowerCase()}`:'Blocked — choose empty ground');}}
+    if(state.previewValid){const type=ROOM_TYPES[state.buildRole],cost=buildCost(type,r.w*r.d);if(state.gold<cost){toast(`Need ${cost} gold to build this ${type.name.toLowerCase()}`);}else{state.gold-=cost;r.id=state.nextId++;r.condition='occupied';r.role=state.buildRole;r.layer=state.layer;r.doorsOpen=true;state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();if(r.role==='hall'&&r.layer==='surface')spawnWorkers();constructionBurst(r);if(preferences.autosave)save(true);toast(`${type.name} raised · ${cost} gold`);}}
+    else {state.selected=pickRoom(e);updateSelection();if(!state.selected){const type=ROOM_TYPES[state.buildRole],cost=buildCost(type,r.w*r.d);toast(isValidRect(r)&&state.gold<cost?`Need ${cost} gold for this ${type.name.toLowerCase()}`:'Blocked — choose empty ground');}}
     state.dragStart=state.dragEnd=null;previewGroup.clear();
   }
 });
@@ -571,14 +575,14 @@ function assignWorkerTask(worker){
   if(!target)return;const start={x:Math.floor(worker.position.x/CELL),z:Math.floor(worker.position.z/CELL)},goal=roomCenterCell(target),path=findPath(start,goal);if(path.length){u.path=path.slice(1);u.targetRoom=target.id;u.task=task;}
 }
 function updateWorker(worker,dt){
-  const u=worker.userData;u.hunger=Math.max(0,u.hunger-dt*.42);u.rest=Math.max(0,u.rest-dt*.18);u.morale=Math.max(15,Math.min(100,u.morale+dt*(u.hunger>35?.05:-.18)));
+  const u=worker.userData;u.hunger=Math.max(0,u.hunger-dt*.42*difficulty().hunger);u.rest=Math.max(0,u.rest-dt*.18);u.morale=Math.max(15,Math.min(100,u.morale+dt*(u.hunger>35?.05:-.18)));
   if(!u.path.length){u.leftArm.rotation.x*=.82;u.rightArm.rotation.x*=.82;u.leftLeg.rotation.x*=.82;u.rightLeg.rotation.x*=.82;const room=state.rooms.find(r=>r.id===u.targetRoom);if(room?.role==='kitchen'&&state.food>=1&&u.hunger<85){state.food-=1;u.hunger=Math.min(100,u.hunger+28);}if(room?.role==='barracks')u.rest=Math.min(100,u.rest+dt*8);if(Math.floor(state.simTime+u.index)%4===0)assignWorkerTask(worker);return;}
   const cell=u.path[0],target=new THREE.Vector3((cell.x+.5)*CELL,.08,(cell.z+.5)*CELL),delta=target.clone().sub(worker.position);if(delta.length()<.07)u.path.shift();else{worker.rotation.y=Math.atan2(delta.x,delta.z);worker.position.addScaledVector(delta.normalize(),Math.min(1.75*dt,delta.length()));worker.position.y=.08+Math.abs(Math.sin(state.simTime*7+u.index))*.035;}
   const swing=Math.sin(state.simTime*8+u.walkPhase)*.55;u.leftArm.rotation.x=swing;u.rightArm.rotation.x=-swing;u.leftLeg.rotation.x=-swing*.65;u.rightLeg.rotation.x=swing*.65;
 }
 function simulateStep(){
   const operational=state.rooms.filter(roomOperational),treasuries=operational.filter(r=>r.role==='treasury').length,kitchens=operational.filter(r=>r.role==='kitchen').length,farms=operational.filter(r=>r.role==='farm').length,orchards=operational.filter(r=>r.role==='orchard').length,markets=operational.filter(r=>r.role==='market').length,stores=operational.filter(r=>r.role==='storehouse').length,forges=operational.filter(r=>r.role==='forge').length;
-  const capacity=500+treasuries*500+stores*250;state.gold=Math.min(capacity,state.gold+treasuries*1.5+forges*.35+markets*.25);state.food=Math.min(300+kitchens*200+farms*150+orchards*80,state.food+kitchens*.65+farms*.85+orchards*.35);
+  const capacity=500+treasuries*500+stores*250,p=difficulty().production;state.gold=Math.min(capacity,state.gold+(treasuries*1.5+forges*.35+markets*.25)*p);state.food=Math.min(300+kitchens*200+farms*150+orchards*80,state.food+(kitchens*.65+farms*.85+orchards*.35)*p);
   updateSimHUD();
 }
 function sendKeeper(){
@@ -656,14 +660,15 @@ function endTutorial() {
 }
 function startNewDungeon() {
   state.cutawayRoom=null;
-  state.rooms=[];state.decorations=[];state.selected=null;state.selectedDecor=null;state.nextId=1;state.nextDecorId=1;state.gold=260;state.food=60;state.progressionTier=1;state.timeScale=1;state.simTime=0;state.showcase=false;state.layer='surface';setLayer('surface');document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');selectRoomType('hall');cam.target.set(0,0,0);cam.distance=23;updateBuildCamera();toast('Open land awaits · build a Great Hall');
+  const start=difficulty();state.gold=start.gold;state.food=start.food;
+  state.rooms=[];state.decorations=[];state.selected=null;state.selectedDecor=null;state.nextId=1;state.nextDecorId=1;state.gold=start.gold;state.food=start.food;state.progressionTier=1;state.timeScale=1;state.simTime=0;state.showcase=false;state.layer='surface';setLayer('surface');document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');selectRoomType('hall');cam.target.set(0,0,0);cam.distance=23;updateBuildCamera();toast(`${start.name} · open land awaits · build a Great Hall`);
 }
 function selectTool(tool){
   state.tool=tool;document.querySelectorAll('.room-type').forEach(b=>b.classList.toggle('active',tool==='room'&&b.dataset.roomRole===state.buildRole));document.querySelectorAll('.decor-tool').forEach(b=>b.classList.toggle('active',b.dataset.decor===tool));
   document.querySelector('#hint').textContent=tool==='room'?`LMB DRAG Build ${ROOM_TYPES[state.buildRole].name} · CLICK Select · RMB DRAG Rotate view`:`CLICK inside a room to place ${tool} · Choose a room type to resume building`;
 }
 function selectRoomType(role){
-  state.buildRole=role;selectTool('room');const type=ROOM_TYPES[role],panel=document.querySelector('#buildPurpose');panel.querySelector('b').textContent=type.name.toUpperCase();panel.querySelector('span').textContent=`${type.cost} gold per tile · ${type.needs}`;panel.querySelector('p').textContent=type.purpose;
+  state.buildRole=role;selectTool('room');const type=ROOM_TYPES[role],panel=document.querySelector('#buildPurpose');panel.querySelector('b').textContent=type.name.toUpperCase();panel.querySelector('span').textContent=`${Math.ceil(type.cost*difficulty().cost)} gold per tile · ${type.needs}`;panel.querySelector('p').textContent=type.purpose;
 }
 document.querySelector('#buildMode').onclick=()=>{state.choosingExploreStart=false;document.querySelector('#exploreMode').textContent='EXPLORE';setMode('build');};document.querySelector('#exploreMode').onclick=chooseExploreStart;
 document.querySelector('#surfaceLayer').onclick=()=>setLayer('surface');document.querySelector('#undergroundLayer').onclick=()=>setLayer('underground');
@@ -688,7 +693,7 @@ document.querySelectorAll('.room-type').forEach(b=>b.onclick=()=>{if(!b.disabled
 const continueBtn=document.querySelector('#continueBtn');continueBtn.disabled=!localStorage.getItem('stonekeep-save');continueBtn.onclick=()=>{load();document.body.classList.remove('menu-open');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');};
 function openSettings(){settings.classList.remove('hidden');applyPreferences();}
 document.querySelector('#settingsBtn').onclick=openSettings;document.querySelector('#menuSettingsBtn').onclick=openSettings;document.querySelector('#closeSettings').onclick=()=>settings.classList.add('hidden');document.querySelector('#applySettings').onclick=savePreferences;
-document.querySelector('#resetSettings').onclick=()=>{Object.assign(preferences,{quality:'high',volume:70,brightness:125,fog:55,torch:110,gridOpacity:60,fov:68,speed:100,sensitivity:100,showGrid:true,invertLook:false,autosave:true,reduceMotion:false});applyPreferences();};
+document.querySelector('#resetSettings').onclick=()=>{Object.assign(preferences,{difficulty:'standard',quality:'high',volume:70,brightness:125,fog:55,torch:110,gridOpacity:60,fov:68,speed:100,sensitivity:100,showGrid:true,invertLook:false,autosave:true,reduceMotion:false});applyPreferences();};
 document.querySelector('#tutorialExit').onclick=endTutorial;document.querySelector('#tutorialBack').onclick=()=>showTutorialStep(tutorialIndex-1);document.querySelector('#tutorialNext').onclick=()=>tutorialIndex===tutorialSteps.length-1?endTutorial():showTutorialStep(tutorialIndex+1);
 addEventListener('keydown',e=>{keys.add(e.code);if(e.code==='Delete')deleteSelected();if(e.code==='KeyR'&&state.mode==='build')rotateSelected();if(e.code==='KeyO'&&state.mode==='build')document.querySelector('#doorBtn').click();if(e.code==='KeyP'&&state.mode==='build')sendKeeper();if(e.code==='KeyB')setMode('build');if((e.ctrlKey||e.metaKey)&&e.code==='KeyS'){e.preventDefault();save();}});
 addEventListener('keyup',e=>keys.delete(e.code));
