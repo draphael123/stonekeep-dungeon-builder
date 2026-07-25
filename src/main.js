@@ -5,7 +5,24 @@ import { THEMES, makeThemeMaterials } from './themes.js';
 const CELL = 2, WALL_H = 2.8, WALL_T = .24;
 const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
-const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:500, food:100, timeScale:1, simTime:0, simAccumulator:0 };
+const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'unassigned', mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:500, food:100, timeScale:1, simTime:0, simAccumulator:0 };
+const ROOM_TYPES={
+  unassigned:{name:'Unassigned Chamber',cost:5,purpose:'A flexible chamber with no production. Assign its purpose later.',needs:'No furnishing requirement'},
+  treasury:{name:'Treasury',cost:6,purpose:'Stores more gold and generates income while operational.',needs:'Requires a chest or gold pile'},
+  barracks:{name:'Barracks',cost:6,purpose:'Lets tired workers and future guards recover their energy.',needs:'Requires a cot or bedroll'},
+  kitchen:{name:'Kitchen',cost:6,purpose:'Produces food and feeds hungry inhabitants.',needs:'Requires a cauldron'},
+  guard:{name:'Guard Room',cost:6,purpose:'Creates a defensible post beside important passages.',needs:'Requires a weapon rack'},
+  library:{name:'Library',cost:7,purpose:'Prepared for research, lore, and magical discoveries.',needs:'Requires a bookshelf'},
+  workshop:{name:'Workshop',cost:7,purpose:'Prepared to manufacture doors, traps, and equipment.',needs:'Requires a table or crate'},
+  crypt:{name:'Crypt',cost:6,purpose:'Provides quarters for undead inhabitants.',needs:'Requires a statue or sarcophagus'},
+  prison:{name:'Prison',cost:7,purpose:'Holds captured heroes behind secure doors.',needs:'Requires a cage'},
+  infirmary:{name:'Infirmary',cost:7,purpose:'Prepared to heal injured inhabitants after raids.',needs:'Requires a cot'},
+  tavern:{name:'Tavern',cost:6,purpose:'Improves morale and gives inhabitants a social space.',needs:'Requires a table or bench'},
+  training:{name:'Training Hall',cost:7,purpose:'Prepared to improve guards and combat units.',needs:'Requires a weapon rack'},
+  alchemy:{name:'Alchemy Laboratory',cost:8,purpose:'Prepared to brew potions and volatile defenses.',needs:'Requires a cauldron or table'},
+  shrine:{name:'Dark Shrine',cost:8,purpose:'Prepared to generate influence and magical power.',needs:'Requires a statue or brazier'},
+  throne:{name:'Throne Room',cost:10,purpose:'A ceremonial seat of power that anchors the keep.',needs:'Requires a banner'}
+};
 const preferences = { quality: 'high', volume: 70, brightness: 125, fog: 55, torch: 110, gridOpacity: 60, fov: 68, speed: 100, sensitivity: 100, showGrid: true, invertLook: false, autosave: true, reduceMotion: false };
 const keys = new Set();
 
@@ -117,7 +134,7 @@ function addCeiling(group,room){
 function addCylinder(group,r,depth,pos,material,segments=10){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,depth,segments),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;
 }
-const ROLE_REQUIREMENTS={treasury:['chest','goldpile'],barracks:['cot','bedroll'],guard:['weaponrack'],library:['bookshelf'],kitchen:['cauldron'],workshop:['table','crate'],crypt:['statue'],prison:['cage'],throne:['banner'],heart:[]};
+const ROLE_REQUIREMENTS={treasury:['chest','goldpile'],barracks:['cot','bedroll'],guard:['weaponrack'],library:['bookshelf'],kitchen:['cauldron'],workshop:['table','crate'],crypt:['statue'],prison:['cage'],infirmary:['cot'],tavern:['table','bench'],training:['weaponrack'],alchemy:['cauldron','table'],shrine:['statue','brazier'],throne:['banner'],heart:[]};
 function roomOperational(room){
   if(!room.role||room.role==='unassigned')return false;if(room.condition==='battle'||room.condition==='abandoned')return false;
   const types=new Set(state.decorations.filter(d=>d.roomId===room.id).map(d=>d.type));return (ROLE_REQUIREMENTS[room.role]||[]).some(t=>types.has(t))||(ROLE_REQUIREMENTS[room.role]||[]).length===0;
@@ -249,11 +266,12 @@ function constructionBurst(room){
 }
 function updatePreview() {
   previewGroup.clear(); if(!state.dragStart||!state.dragEnd)return;
-  const r=normalizeRect(state.dragStart,state.dragEnd); state.previewValid=isValidRect(r);
+  const r=normalizeRect(state.dragStart,state.dragEnd),type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost; state.previewValid=isValidRect(r)&&state.gold>=cost;
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(r.w*CELL-.08,.14,r.d*CELL-.08),state.previewValid?mats.previewValid:mats.previewInvalid);
   mesh.position.set((r.x+r.w/2)*CELL,.18,(r.z+r.d/2)*CELL); previewGroup.add(mesh);
   const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:state.previewValid?0x8ff0bc:0xff7a6b}));
   edges.position.copy(mesh.position); previewGroup.add(edges);
+  document.querySelector('#buildPurpose span').textContent=`${cost} gold total · ${type.cost} per tile${state.gold<cost?' · INSUFFICIENT GOLD':''}`;
 }
 function updateSelection() {
   selectionGroup.clear();
@@ -266,7 +284,8 @@ function updateSelection() {
   document.querySelector('#decorOptions').classList.toggle('hidden',!d);
   document.querySelector('#rotateBtn span:nth-child(2)').textContent=d?'Turn 90°':'Rotate';
   document.querySelector('#deleteBtn span:nth-child(2)').textContent=d?'Remove':'Demolish';
-  document.querySelector('#selectionInfo').textContent=d?`${d.type[0].toUpperCase()+d.type.slice(1)} · ${Math.round((d.rotation||0)*180/Math.PI)%360}° · ${Math.round((d.scale||1)*100)}%`:r?`${r.role==='heart'?'Dungeon Heart':`Room ${r.id}`} · ${r.w} × ${r.d} tiles${r.role&&r.role!=='unassigned'?` · ${roomOperational(r)?'Operational':'Inactive'}`:''}`:'Drag across the grid to raise a chamber.';
+  const roomType=r?(r.role==='heart'?{name:'Dungeon Heart',purpose:'The indestructible source of your keep.'}:ROOM_TYPES[r.role||'unassigned']):null;
+  document.querySelector('#selectionInfo').textContent=d?`${d.type[0].toUpperCase()+d.type.slice(1)} · ${Math.round((d.rotation||0)*180/Math.PI)%360}° · ${Math.round((d.scale||1)*100)}%`:r?`${roomType.name} · ${r.w} × ${r.d} tiles${r.role&&r.role!=='unassigned'?` · ${roomOperational(r)?'Operational':'Inactive'}`:''}. ${roomType.purpose}`:'Choose a room purpose, then drag across the grid.';
   const conditionSelect=document.querySelector('#conditionSelect');conditionSelect.disabled=!r||!!d;if(r)conditionSelect.value=r.condition||'occupied';
   const roleSelect=document.querySelector('#roleSelect');roleSelect.disabled=!r||!!d||r?.role==='heart';if(r)roleSelect.value=r.role||'unassigned';
   document.querySelector('#dressRoomBtn').disabled=!r||!!d||r?.role==='heart';
@@ -380,8 +399,8 @@ renderer.domElement.addEventListener('pointerup',e=>{
   if(e.button===2){rightDrag=false;return}
   if(e.button===0&&state.mode==='build'&&state.dragStart){
     const r=normalizeRect(state.dragStart,state.dragEnd);
-    if(state.previewValid){const cost=r.w*r.d*5;if(state.gold<cost){toast(`Need ${cost} gold to raise this chamber`);}else{state.gold-=cost;r.id=state.nextId++;r.condition='occupied';r.role='unassigned';r.doorsOpen=true;state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();constructionBurst(r);if(preferences.autosave)save(true);toast(`Chamber raised · ${cost} gold`);}}
-    else {state.selected=pickRoom(e);updateSelection();if(!state.selected)toast('Blocked — choose empty ground');}
+    if(state.previewValid){const type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost;if(state.gold<cost){toast(`Need ${cost} gold to build this ${type.name.toLowerCase()}`);}else{state.gold-=cost;r.id=state.nextId++;r.condition='occupied';r.role=state.buildRole;r.doorsOpen=true;state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();constructionBurst(r);if(preferences.autosave)save(true);toast(`${type.name} raised · ${cost} gold`);}}
+    else {state.selected=pickRoom(e);updateSelection();if(!state.selected){const type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost;toast(isValidRect(r)&&state.gold<cost?`Need ${cost} gold for this ${type.name.toLowerCase()}`:'Blocked — choose empty ground');}}
     state.dragStart=state.dragEnd=null;previewGroup.clear();
   }
 });
@@ -456,6 +475,11 @@ function dressRoom(){
     workshop:[['table',0,0,0,1.1,2],['crate',-1,-1,0,.9,0],['barrel',1,-1,0,.85,0],['rubble',1,1,0,.8,0]],
     crypt:[['statue',0,1,Math.PI,1.15,0],['cage',-1,-1,0,.85,0],['brazier',1,-1,0,.8,0],['rubble',-1,1,0,.8,0]],
     prison:[['cage',-1,0,0,.9,0],['cage',1,0,0,.9,1],['bench',0,-1,0,.85,0],['brazier',0,1,0,.75,0]],
+    infirmary:[['cot',-1,0,0,.9,0],['cot',1,0,0,.9,1],['table',0,-1,0,.8,0],['brazier',0,1,0,.7,0]],
+    tavern:[['table',0,0,0,1.1,1],['bench',-1,0,0,.9,1],['bench',1,0,Math.PI,.9,0],['barrel',1,-1,0,.85,0]],
+    training:[['weaponrack',-1,-1,0,1,0],['weaponrack',1,-1,0,1,1],['bench',0,1,0,.85,0],['rubble',1,1,0,.65,0]],
+    alchemy:[['cauldron',0,0,0,1,0],['table',-1,-1,0,.9,2],['bookshelf',1,-1,0,.85,1],['brazier',1,1,0,.7,0]],
+    shrine:[['statue',0,1,Math.PI,1.25,2],['brazier',-1,0,0,.9,0],['brazier',1,0,0,.9,0],['banner',0,-1,0,1,2]],
     throne:[['statue',-1,1,0,1.1,0],['statue',1,1,0,1.1,1],['banner',-1,-1,0,1,0],['banner',1,-1,0,1,1]]
   };
   const recipe=recipes[role]||[['table',0,0,Math.PI/2,1.05,1],['bench',-1,0,0,.9,1],['bookshelf',1,-1,0,.85,0],['chest',1,1,Math.PI/4,.8,1]];
@@ -476,7 +500,7 @@ function buildHeroRoom(){
 
 const tutorialSteps = [
   { target:'.topbar', kicker:'WELCOME, ARCHITECT', title:'Your keep begins here.', body:'This guided tour follows the real interface. Build and Explore are your two main modes; you can revisit this tutorial anytime with the ? button.' },
-  { target:'.palette', kicker:'STEP ONE · CONSTRUCTION', title:'Choose what to build.', body:'The construction palette holds modular room and corridor tools. Stone Room is selected, so you are ready to draw a chamber.' },
+  { target:'.palette', kicker:'STEP ONE · CONSTRUCTION', title:'Choose a room purpose.', body:'Each room type explains its job, cost, and required furnishings. Choose one before dragging its footprint on the grid.' },
   { target:null, kicker:'STEP TWO · PLACE A ROOM', title:'Drag across the grid.', body:'Hold the left mouse button and drag over empty tiles. A green preview is valid; red means the footprint overlaps another room or is too large.' },
   { target:'.palette', kicker:'STEP THREE · EDIT', title:'Select, rotate, demolish.', body:'Click a finished room to select it. Use Rotate or press R to turn its footprint. Use Demolish or Delete to remove it.' },
   { target:'.mode-switch', kicker:'STEP FOUR · EXPLORE', title:'Walk what you build.', body:'Choose Explore after placing a room. Click the 3D view, look with the mouse, and move with WASD. Press B to return to Build mode.' },
@@ -503,11 +527,14 @@ function endTutorial() {
   document.querySelector('#tutorial').classList.add('hidden');document.querySelectorAll('.tutorial-focus').forEach(e=>e.classList.remove('tutorial-focus'));localStorage.setItem('stonekeep-tutorial-complete','true');toast('Tutorial complete — begin building');
 }
 function startNewDungeon() {
-  state.rooms=[{id:1,x:-2,z:-2,w:4,d:4,condition:'pristine',role:'heart',doorsOpen:true,preset:'heart'}];state.decorations=[];state.selected=1;state.selectedDecor=null;state.nextId=2;state.nextDecorId=1;state.gold=500;state.food=100;state.timeScale=1;state.simTime=0;state.showcase=false;selectTool('room');buildWorld();spawnWorkers();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('The dungeon heart awakens');
+  state.rooms=[{id:1,x:-2,z:-2,w:4,d:4,condition:'pristine',role:'heart',doorsOpen:true,preset:'heart'}];state.decorations=[];state.selected=1;state.selectedDecor=null;state.nextId=2;state.nextDecorId=1;state.gold=500;state.food=100;state.timeScale=1;state.simTime=0;state.showcase=false;selectRoomType('unassigned');buildWorld();spawnWorkers();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('The dungeon heart awakens');
 }
 function selectTool(tool){
-  state.tool=tool;document.querySelector('#roomTool').classList.toggle('active',tool==='room');document.querySelectorAll('.decor-tool').forEach(b=>b.classList.toggle('active',b.dataset.decor===tool));
-  document.querySelector('#hint').textContent=tool==='room'?'LMB DRAG Place room · CLICK Select · RMB DRAG Rotate view · WHEEL Zoom':`CLICK inside a room to place ${tool} · Choose Stone Room to resume building`;
+  state.tool=tool;document.querySelectorAll('.room-type').forEach(b=>b.classList.toggle('active',tool==='room'&&b.dataset.roomRole===state.buildRole));document.querySelectorAll('.decor-tool').forEach(b=>b.classList.toggle('active',b.dataset.decor===tool));
+  document.querySelector('#hint').textContent=tool==='room'?`LMB DRAG Build ${ROOM_TYPES[state.buildRole].name} · CLICK Select · RMB DRAG Rotate view`:`CLICK inside a room to place ${tool} · Choose a room type to resume building`;
+}
+function selectRoomType(role){
+  state.buildRole=role;selectTool('room');const type=ROOM_TYPES[role],panel=document.querySelector('#buildPurpose');panel.querySelector('b').textContent=type.name.toUpperCase();panel.querySelector('span').textContent=`${type.cost} gold per tile · ${type.needs}`;panel.querySelector('p').textContent=type.purpose;
 }
 document.querySelector('#buildMode').onclick=()=>setMode('build');document.querySelector('#exploreMode').onclick=()=>setMode('explore');
 document.querySelector('#deleteBtn').onclick=deleteSelected;document.querySelector('#rotateBtn').onclick=rotateSelected;document.querySelector('#saveBtn').onclick=save;document.querySelector('#loadBtn').onclick=load;
@@ -517,7 +544,7 @@ document.querySelector('#scaleUpBtn').onclick=()=>editDecor(d=>d.scale=Math.min(
 document.querySelector('#variantBtn').onclick=()=>editDecor(d=>d.variant=((d.variant||0)+1)%3,'Decoration varied');
 document.querySelector('#duplicateBtn').onclick=()=>{const d=state.decorations.find(x=>x.id===state.selectedDecor);if(!d)return;const copy={...d,id:state.nextDecorId++,rotation:(d.rotation||0)+Math.PI/12};state.decorations.push(copy);state.selectedDecor=copy.id;buildWorld();if(preferences.autosave)save(true);toast('Decoration duplicated');};
 document.querySelector('#conditionSelect').onchange=e=>{const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;r.condition=e.target.value;buildWorld();if(preferences.autosave)save(true);toast(`${e.target.options[e.target.selectedIndex].text} room applied`);};
-document.querySelector('#roleSelect').onchange=e=>{const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;r.role=e.target.value;if(r.role==='throne')r.preset='throne';buildWorld();if(preferences.autosave)save(true);toast(`${e.target.options[e.target.selectedIndex].text} assigned`);};
+document.querySelector('#roleSelect').onchange=e=>{const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;r.role=e.target.value;if(r.role==='throne')r.preset='throne';else if(r.preset==='throne')delete r.preset;buildWorld();if(preferences.autosave)save(true);toast(`${e.target.options[e.target.selectedIndex].text} assigned`);};
 document.querySelector('#doorBtn').onclick=()=>{const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;r.doorsOpen=r.doorsOpen===false;state.keeperPath=[];buildWorld();if(preferences.autosave)save(true);toast(r.doorsOpen?'Doors opened':'Doors secured');};
 document.querySelector('#pathTestBtn').onclick=sendKeeper;
 document.querySelector('#dressRoomBtn').onclick=dressRoom;document.querySelector('#heroRoomBtn').onclick=buildHeroRoom;
@@ -526,7 +553,7 @@ document.querySelector('#pauseTime').onclick=()=>setTimeScale(0);document.queryS
 const help=document.querySelector('#help'),settings=document.querySelector('#settings');
 document.querySelector('#helpBtn').onclick=()=>help.classList.remove('hidden');document.querySelector('#closeHelp').onclick=()=>help.classList.add('hidden');document.querySelector('#startTutorialFromHelp').onclick=startTutorial;
 document.querySelector('#newGameBtn').onclick=startNewDungeon;document.querySelector('#tutorialBtn').onclick=startTutorial;
-document.querySelector('#roomTool').onclick=()=>selectTool('room');document.querySelectorAll('.decor-tool').forEach(b=>b.onclick=()=>selectTool(b.dataset.decor));
+document.querySelectorAll('.room-type').forEach(b=>b.onclick=()=>selectRoomType(b.dataset.roomRole));document.querySelectorAll('.decor-tool').forEach(b=>b.onclick=()=>selectTool(b.dataset.decor));
 const continueBtn=document.querySelector('#continueBtn');continueBtn.disabled=!localStorage.getItem('stonekeep-save');continueBtn.onclick=()=>{load();document.body.classList.remove('menu-open');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');};
 function openSettings(){settings.classList.remove('hidden');applyPreferences();}
 document.querySelector('#settingsBtn').onclick=openSettings;document.querySelector('#menuSettingsBtn').onclick=openSettings;document.querySelector('#closeSettings').onclick=()=>settings.classList.add('hidden');document.querySelector('#applySettings').onclick=savePreferences;
