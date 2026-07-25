@@ -69,6 +69,15 @@ scene.add(sun);
 
 const world = new THREE.Group(), previewGroup = new THREE.Group(), selectionGroup = new THREE.Group(), infoGroup=new THREE.Group(), atmosphereGroup=new THREE.Group(), effectsGroup=new THREE.Group(), terrainGroup=new THREE.Group(),lifeGroup=new THREE.Group();
 scene.add(world, previewGroup, selectionGroup,infoGroup, atmosphereGroup, effectsGroup,terrainGroup,lifeGroup);
+const skyGroup=new THREE.Group();scene.add(skyGroup);const horizonLife=[];
+function buildSky(){
+  const sky=new THREE.Mesh(new THREE.SphereGeometry(92,32,18),new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,uniforms:{top:{value:new THREE.Color(0x263e4b)},horizon:{value:new THREE.Color(0x91a394)},ground:{value:new THREE.Color(0x4f6154)}},vertexShader:'varying vec3 vPos; void main(){vPos=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',fragmentShader:'uniform vec3 top;uniform vec3 horizon;uniform vec3 ground;varying vec3 vPos;void main(){float h=normalize(vPos).y;vec3 c=mix(horizon,top,smoothstep(0.0,.72,h));c=mix(ground,c,smoothstep(-.18,.08,h));gl_FragColor=vec4(c,1.0);}'}));skyGroup.add(sky);
+  const sunDisc=new THREE.Mesh(new THREE.CircleGeometry(4.2,32),new THREE.MeshBasicMaterial({color:0xffd894,transparent:true,opacity:.78,depthWrite:false}));sunDisc.position.set(-42,36,-58);sunDisc.lookAt(0,8,0);skyGroup.add(sunDisc);const halo=new THREE.PointLight(0xffd39a,1.1,95,2);halo.position.copy(sunDisc.position);skyGroup.add(halo);
+  const mountainMat=new THREE.MeshStandardMaterial({color:0x34483f,roughness:1});for(let i=0;i<16;i++){const a=i/16*Math.PI*2,peak=new THREE.Mesh(new THREE.ConeGeometry(8+(i%4)*2.2,13+(i%5)*3,6),mountainMat);peak.position.set(Math.cos(a)*69,3.5,Math.sin(a)*69);peak.scale.z=.58;peak.rotation.y=-a;skyGroup.add(peak);}
+  const mill=new THREE.Group();mill.position.set(39,0,-31);addCylinder(mill,2.1,7,[0,3.5,0],new THREE.MeshStandardMaterial({color:0x8d8066,roughness:1}),8);const cap=new THREE.Mesh(new THREE.ConeGeometry(2.5,2.3,8),roofShingles);cap.position.y=8;mill.add(cap);const blades=new THREE.Group();blades.position.set(0,6.5,-2.05);for(let i=0;i<4;i++){const arm=addBox(blades,[.18,5,.12],[0,2.3,0],mats.wood);arm.rotation.z=i*Math.PI/2;}mill.add(blades);blades.userData.windmill=true;horizonLife.push(blades);skyGroup.add(mill);
+  for(let i=0;i<5;i++){const deer=new THREE.Group();addBox(deer,[.65,.45,.24],[0,.65,0],mats.leather);addCylinder(deer,.09,.7,[.23,.28,.08],mats.leather,6);addCylinder(deer,.09,.7,[-.23,.28,-.08],mats.leather,6);const neck=addCylinder(deer,.12,.65,[0,1,-.05],mats.leather,7);neck.rotation.x=.35;const head=new THREE.Mesh(new THREE.SphereGeometry(.18,8,6),mats.leather);head.position.set(0,1.32,-.2);deer.add(head);deer.position.set(-30+i*3.1,.02,26+(i%2)*2);deer.userData.phase=i;horizonLife.push(deer);lifeGroup.add(deer);}
+}
+buildSky();
 
 const grid = new THREE.GridHelper(80, 40, 0x86754f, 0x353b38);
 grid.position.y = .012; grid.material.transparent = true; grid.material.opacity = .6; scene.add(grid);
@@ -582,6 +591,7 @@ function setLayer(layer){
   workers.forEach(w=>w.visible=layer==='surface'&&state.rooms.some(r=>r.layer==='surface'));
   terrainGroup.visible=layer==='surface';
   lifeGroup.visible=layer==='surface';
+  skyGroup.visible=layer==='surface';
   selectRoomType(layer==='surface'?'cottage':'unassigned');buildWorld();toast(layer==='surface'?'Surface stronghold':'Underground works');
 }
 
@@ -751,6 +761,7 @@ function tick(){
     for(const bird of birds){const u=bird.userData,a=elapsed*(.12+u.flock*.012)+u.phase;bird.position.x=Math.cos(a)*u.radius;bird.position.z=Math.sin(a)*u.radius;bird.rotation.y=-a;const flap=Math.sin(elapsed*7+u.phase)*.48;u.left.rotation.z=.18+flap;u.right.rotation.z=-.18-flap;}
     for(const cloud of clouds){cloud.position.x+=cloud.userData.speed*dt;if(cloud.position.x>48)cloud.position.x=-48;}
     for(const b of butterflies){const u=b.userData,t=elapsed*1.4+u.phase;b.position.x=u.origin.x+Math.sin(t)*.8;b.position.z=u.origin.z+Math.cos(t*.73)*.65;b.position.y=u.origin.y+Math.sin(t*2.1)*.16;const flap=Math.sin(t*9)*.85;u.left.rotation.z=flap;u.right.rotation.z=-flap;}
+    for(const h of horizonLife){if(h.userData.windmill)h.rotation.z=-elapsed*.32;else{h.position.x+=Math.sin(elapsed*.45+h.userData.phase)*dt*.18;h.rotation.y=Math.sin(elapsed*.22+h.userData.phase)*.35;}}
     for(const o of terrainGroup.children)if(o.userData.wind!=null)o.rotation.z=Math.sin(elapsed*.75+o.userData.wind)*.025;
     const weatherWave=Math.max(0,Math.sin(elapsed*.055-1.2)),rainStrength=Math.max(0,(weatherWave-.72)/.28);state.weatherRain=rainStrength;rain.material.opacity=rainStrength*.58;sun.intensity=theme.atmosphere.sunIntensity*1.35*(1-rainStrength*.35);
     const ra=rain.geometry.attributes.position;for(let i=1;i<ra.array.length;i+=3){ra.array[i]-=(8+rainStrength*12)*dt;if(ra.array[i]<0)ra.array[i]=16;}ra.needsUpdate=true;
