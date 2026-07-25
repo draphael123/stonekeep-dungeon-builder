@@ -32,10 +32,24 @@
         <button class="decor-tool" data-decor="barrel" title="Barrel"><span>●</span>BARREL</button>
         <button class="decor-tool" data-decor="brazier" title="Brazier"><span>♨</span>BRAZIER</button>
         <button class="decor-tool" data-decor="banner" title="Banner Stand"><span>⚑</span>BANNER</button>
+        <button class="decor-tool" data-decor="bench" title="Wooden Bench"><span>═</span>BENCH</button>
+        <button class="decor-tool" data-decor="bookshelf" title="Bookshelf"><span>▥</span>BOOKS</button>
+        <button class="decor-tool" data-decor="crate" title="Supply Crate"><span>▧</span>CRATE</button>
+        <button class="decor-tool" data-decor="bedroll" title="Bedroll"><span>▰</span>BEDROLL</button>
+        <button class="decor-tool" data-decor="statue" title="Stone Statue"><span>♟</span>STATUE</button>
+        <button class="decor-tool" data-decor="cage" title="Iron Cage"><span>▦</span>CAGE</button>
+        <button class="decor-tool" data-decor="rubble" title="Rubble Pile"><span>◆</span>RUBBLE</button>
       </div>
       <div class="divider"></div>
-      <p class="eyebrow">SELECTED ROOM</p>
+      <p id="selectionLabel" class="eyebrow">SELECTED ROOM</p>
       <button id="rotateBtn" class="tool compact"><span class="tool-icon">↻</span><span>Rotate</span><kbd>R</kbd></button>
+      <div id="decorOptions" class="decor-options hidden">
+        <button id="rotateFineBtn" title="Rotate 15 degrees">+15°</button>
+        <button id="scaleDownBtn" title="Make smaller">− SIZE</button>
+        <button id="scaleUpBtn" title="Make larger">+ SIZE</button>
+        <button id="variantBtn" title="Change visual variation">VARIANT</button>
+        <button id="duplicateBtn" title="Duplicate selected decoration">DUPLICATE</button>
+      </div>
       <button id="deleteBtn" class="tool compact danger"><span class="tool-icon">×</span><span>Demolish</span><kbd>Del</kbd></button>
       <div class="theme-card">
         <span class="swatch"></span><div><small>ACTIVE THEME</small><strong>Stone Keep</strong></div>
@@ -109,7 +123,7 @@
         <div class="help-grid">
           <div><b>Build</b><p>Drag the left mouse button over empty tiles. Adjacent chambers automatically receive connecting doorways.</p></div>
           <div><b>Inspect</b><p>Click a room to select it. Press R to rotate its footprint, or Delete to remove it.</p></div>
-          <div><b>Decorate</b><p>Choose a decoration from the palette, then click any tile inside a completed room to place it.</p></div>
+          <div><b>Decorate</b><p>Place a decoration, return to the Stone Room tool, then click it to rotate, resize, vary, duplicate, or remove it.</p></div>
           <div><b>Navigate</b><p>Right-drag to orbit, wheel to zoom, and use WASD or arrows to pan the build camera.</p></div>
           <div><b>Explore</b><p>Enter Explore, click the view, then use WASD and the mouse. Escape releases the pointer.</p></div>
         </div>
