@@ -7,6 +7,7 @@ const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
 const roadMaterial=new THREE.MeshStandardMaterial({color:0x5a4b36,roughness:1,metalness:0});
 const roadEdgeMaterial=new THREE.MeshStandardMaterial({color:0x71634d,roughness:.95});
+const soilMaterial=new THREE.MeshStandardMaterial({color:0x3f2b1d,roughness:1}),furrowMaterial=new THREE.MeshStandardMaterial({color:0x65432b,roughness:1}),cropMaterial=new THREE.MeshStandardMaterial({color:0x78914b,roughness:1}),canvasMaterial=new THREE.MeshStandardMaterial({color:0xa76a45,roughness:1,side:THREE.DoubleSide});
 const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'cottage', layer:'surface', mode: 'build', progressionTier:1, choosingExploreStart:false, exploreStart:null, dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:180, food:60, timeScale:1, simTime:0, simAccumulator:0 };
 const ROOM_TYPES={
   unassigned:{name:'Unassigned Chamber',cost:5,purpose:'A flexible chamber with no production. Assign its purpose later.',needs:'No furnishing requirement'},
@@ -32,6 +33,10 @@ const ROOM_TYPES={
   ,lumberyard:{name:'Lumber Yard',cost:4,purpose:'Processes timber for buildings, furniture, and defenses.',needs:'Requires a woodcutter'}
   ,road:{name:'Road',cost:1,purpose:'Connects buildings and prepares faster outdoor travel.',needs:'No worker required'}
   ,watchtower:{name:'Watchtower',cost:9,purpose:'Extends sight and protects the settlement boundary.',needs:'Requires a guard'}
+  ,well:{name:'Village Well',cost:4,purpose:'A communal water source and natural gathering point.',needs:'No worker required'}
+  ,fence:{name:'Fence',cost:1,purpose:'Defines farms, gardens, yards, and settlement boundaries.',needs:'No worker required'}
+  ,market:{name:'Market Stall',cost:4,purpose:'Creates a lively trading place for residents and future merchants.',needs:'Requires a resident'}
+  ,orchard:{name:'Orchard',cost:3,purpose:'Adds fruit production, shade, and cultivated greenery.',needs:'Requires a farmer'}
 };
 const preferences = { quality: 'high', volume: 70, brightness: 125, fog: 55, torch: 110, gridOpacity: 60, fov: 68, speed: 100, sensitivity: 100, showGrid: true, invertLook: false, autosave: true, reduceMotion: false };
 const keys = new Set();
@@ -165,8 +170,15 @@ function addSurfaceBuilding(group,room){
     return;
   }
   if(room.role==='farm'){
-    addBox(group,[w,.07,d],[cx,.01,cz],mats.wood,false);for(let z=room.z+.35;z<room.z+room.d;z+=.55)for(let x=room.x+.3;x<room.x+room.w;x+=.5)addCylinder(group,.035,.28,[x*CELL,.18,z*CELL],mats.moss,5);return;
+    addBox(group,[w,.09,d],[cx,.015,cz],soilMaterial,false);
+    const alongX=room.w>=room.d,rows=Math.max(2,Math.floor((alongX?room.d:room.w)*2));for(let i=0;i<rows;i++){const t=(i+.5)/rows-.5;addBox(group,alongX?[w-.25,.075,.18]:[.18,.075,d-.25],[alongX?cx:cx+t*(w-.3),.09,alongX?cz+t*(d-.3):cz],furrowMaterial,false);}
+    for(let z=room.z+.3;z<room.z+room.d;z+=.52)for(let x=room.x+.28;x<room.x+room.w;x+=.52){const crop=addCylinder(group,.04,.3,[x*CELL,.23,z*CELL],cropMaterial,5);crop.rotation.z=((x+z)%2-.5)*.12;}
+    for(let x=room.x*CELL+.1;x<(room.x+room.w)*CELL;x+=1.5){addBox(group,[.09,.55,.09],[x,.28,room.z*CELL+.1],mats.wood);addBox(group,[.09,.55,.09],[x,.28,(room.z+room.d)*CELL-.1],mats.wood);}return;
   }
+  if(room.role==='fence'){const alongX=room.w>=room.d,len=alongX?w:d;for(let i=-len/2;i<=len/2;i+=1.45)addBox(group,[.1,.9,.1],[alongX?cx+i:cx,.45,alongX?cz:cz+i],mats.wood);addBox(group,alongX?[len,.12,.1]:[.1,.12,len],[cx,.62,cz],mats.wood);addBox(group,alongX?[len,.1,.1]:[.1,.1,len],[cx,.32,cz],mats.wood);return;}
+  if(room.role==='well'){addCylinder(group,Math.min(w,d)*.28,.55,[cx,.28,cz],mats.wallTop,16);const opening=addCylinder(group,Math.min(w,d)*.19,.04,[cx,.58,cz],mats.soot,16);for(const x of [-.55,.55])addBox(group,[.12,1.8,.12],[cx+x,.9,cz],mats.wood);addBox(group,[1.35,.12,.12],[cx,1.7,cz],mats.wood);const roof=addBox(group,[1.7,.1,1.05],[cx,1.9,cz],mats.rug);roof.rotation.z=.08;return;}
+  if(room.role==='market'){addBox(group,[w,.07,d],[cx,.015,cz],roadMaterial,false);for(const x of [-w*.35,w*.35])for(const z of [-d*.32,d*.32])addBox(group,[.1,1.8,.1],[cx+x,.9,cz+z],mats.wood);const awning=addBox(group,[w*.85,.1,d*.82],[cx,1.82,cz],canvasMaterial);awning.rotation.z=.05;addBox(group,[w*.72,.55,.48],[cx,.45,cz],mats.wood);for(let i=0;i<5;i++)addBox(group,[.18,.12,.18],[cx+(i-2)*.28,.8,cz],i%2?cropMaterial:mats.brass);return;}
+  if(room.role==='orchard'){addBox(group,[w,.06,d],[cx,.01,cz],mats.moss,false);for(let x=room.x+.5;x<room.x+room.w;x+=1.15)for(let z=room.z+.5;z<room.z+room.d;z+=1.15){addCylinder(group,.11,1.15,[x*CELL,.58,z*CELL],mats.wood,8);const crown=new THREE.Mesh(new THREE.SphereGeometry(.5,9,7),cropMaterial);crown.position.set(x*CELL,1.35,z*CELL);crown.castShadow=true;group.add(crown);for(let i=0;i<3;i++){const fruit=new THREE.Mesh(new THREE.SphereGeometry(.055,6,4),mats.banner);fruit.position.set(x*CELL+(i-1)*.2,1.3+(i%2)*.18,z*CELL-.38);group.add(fruit);}}return;}
   if(room.role==='lumberyard'){addBox(group,[w,.1,d],[cx,.03,cz],mats.moss,false);for(let i=0;i<8;i++){const log=addCylinder(group,.16,1.4,[cx+(i%4-.5)*.42,.2,cz+(Math.floor(i/4)-.5)*.55],mats.wood,9);log.rotation.z=Math.PI/2;}return;}
   addBox(group,[w,.16,d],[cx,.03,cz],mats.floor);
   const wallH=room.role==='watchtower'?4.2:2.35;
@@ -183,7 +195,7 @@ function addSurfaceBuilding(group,room){
 function addCylinder(group,r,depth,pos,material,segments=10){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,depth,segments),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;
 }
-const ROLE_REQUIREMENTS={treasury:['chest','goldpile'],barracks:['cot','bedroll'],guard:['weaponrack'],library:['bookshelf'],kitchen:['cauldron'],workshop:['table','crate'],crypt:['statue'],prison:['cage'],infirmary:['cot'],tavern:['table','bench'],training:['weaponrack'],alchemy:['cauldron','table'],shrine:['statue','brazier'],throne:['banner'],heart:[],hall:[],cottage:[],forge:[],farm:[],storehouse:[],lumberyard:[],road:[],watchtower:[]};
+const ROLE_REQUIREMENTS={treasury:['chest','goldpile'],barracks:['cot','bedroll'],guard:['weaponrack'],library:['bookshelf'],kitchen:['cauldron'],workshop:['table','crate'],crypt:['statue'],prison:['cage'],infirmary:['cot'],tavern:['table','bench'],training:['weaponrack'],alchemy:['cauldron','table'],shrine:['statue','brazier'],throne:['banner'],heart:[],hall:[],cottage:[],forge:[],farm:[],storehouse:[],lumberyard:[],road:[],watchtower:[],well:[],fence:[],market:[],orchard:[]};
 function roomOperational(room){
   if(!room.role||room.role==='unassigned')return false;if(room.condition==='battle'||room.condition==='abandoned')return false;
   const types=new Set(state.decorations.filter(d=>d.roomId===room.id).map(d=>d.type));return (ROLE_REQUIREMENTS[room.role]||[]).some(t=>types.has(t))||(ROLE_REQUIREMENTS[room.role]||[]).length===0;
@@ -312,10 +324,10 @@ function buildWorld() {
   updateProgression();
 }
 function getProgression(){
-  const surface=state.rooms.filter(r=>r.layer==='surface'),roles=new Set(surface.map(r=>r.role));let tier=1,goal=roles.has('hall')?'Build a cottage and a farm':'Build a Great Hall to found the settlement',reward=roles.has('hall')?'Unlocks lumber yard and storehouse':'Establishes your founding camp',done=roles.has('hall')?((roles.has('cottage')?1:0)+(roles.has('farm')?1:0)):0,total=roles.has('hall')?2:1;
+  const surface=state.rooms.filter(r=>r.layer==='surface'),buildingCount=surface.filter(r=>!['road','fence','well'].includes(r.role)).length,roles=new Set(surface.map(r=>r.role));let tier=1,goal=roles.has('hall')?'Build a cottage and a farm':'Build a Great Hall to found the settlement',reward=roles.has('hall')?'Unlocks lumber yard and storehouse':'Establishes your founding camp',done=roles.has('hall')?((roles.has('cottage')?1:0)+(roles.has('farm')?1:0)):0,total=roles.has('hall')?2:1;
   if(roles.has('hall')&&roles.has('cottage')&&roles.has('farm')){tier=2;goal='Build a lumber yard and storehouse';reward='Unlocks the forge';done=(roles.has('lumberyard')?1:0)+(roles.has('storehouse')?1:0);}
-  if(roles.has('lumberyard')&&roles.has('storehouse')){tier=3;goal='Build a forge and grow to 6 buildings';reward='Unlocks underground building and decorations';done=Math.min(2,(roles.has('forge')?1:0)+(surface.length>=6?1:0));}
-  if(roles.has('forge')&&surface.length>=6){tier=4;goal='Build a watchtower';reward='Your village becomes a fortified keep';done=roles.has('watchtower')?1:0;total=1;}
+  if(roles.has('lumberyard')&&roles.has('storehouse')){tier=3;goal='Build a forge and grow to 6 buildings';reward='Unlocks underground building and decorations';done=Math.min(2,(roles.has('forge')?1:0)+(buildingCount>=6?1:0));}
+  if(roles.has('forge')&&buildingCount>=6){tier=4;goal='Build a watchtower';reward='Your village becomes a fortified keep';done=roles.has('watchtower')?1:0;total=1;}
   if(roles.has('watchtower')){tier=5;goal='Expand freely above and below';reward='All current blueprints unlocked';done=1;total=1;}
   return{tier,goal,reward,done,total,names:['','I · FOUNDING CAMP','II · HAMLET','III · VILLAGE','IV · STRONGHOLD','V · STONE KEEP']};
 }
@@ -533,7 +545,7 @@ function assignWorkerTask(worker){
   const u=worker.userData,operational=state.rooms.filter(roomOperational);let target=null,task='Patrolling';
   if(u.hunger<65){target=operational.find(r=>r.role==='kitchen');task='Fetching a meal';}
   if(!target&&u.rest<55){target=operational.find(r=>r.role==='barracks');task='Going to rest';}
-  if(!target){const workRooms=operational.filter(r=>['treasury','kitchen','workshop','guard','hall','forge','farm','storehouse','lumberyard','watchtower'].includes(r.role)&&(r.layer||'underground')===state.layer);target=workRooms[(Math.floor(state.simTime/5)+u.index)%Math.max(1,workRooms.length)];task=target?`Working in ${target.role}`:'Waiting for an operational room';}
+  if(!target){const workRooms=operational.filter(r=>['treasury','kitchen','workshop','guard','hall','forge','farm','storehouse','lumberyard','watchtower','well','market','orchard'].includes(r.role)&&(r.layer||'underground')===state.layer);target=workRooms[(Math.floor(state.simTime/5)+u.index)%Math.max(1,workRooms.length)];task=target?`Working in ${target.role}`:'Waiting for an operational room';}
   if(!target)return;const start={x:Math.floor(worker.position.x/CELL),z:Math.floor(worker.position.z/CELL)},goal=roomCenterCell(target),path=findPath(start,goal);if(path.length){u.path=path.slice(1);u.targetRoom=target.id;u.task=task;}
 }
 function updateWorker(worker,dt){
@@ -543,8 +555,8 @@ function updateWorker(worker,dt){
   const swing=Math.sin(state.simTime*8+u.walkPhase)*.55;u.leftArm.rotation.x=swing;u.rightArm.rotation.x=-swing;u.leftLeg.rotation.x=-swing*.65;u.rightLeg.rotation.x=swing*.65;
 }
 function simulateStep(){
-  const operational=state.rooms.filter(roomOperational),treasuries=operational.filter(r=>r.role==='treasury').length,kitchens=operational.filter(r=>r.role==='kitchen').length,farms=operational.filter(r=>r.role==='farm').length,stores=operational.filter(r=>r.role==='storehouse').length,forges=operational.filter(r=>r.role==='forge').length;
-  const capacity=500+treasuries*500+stores*250;state.gold=Math.min(capacity,state.gold+treasuries*1.5+forges*.35);state.food=Math.min(300+kitchens*200+farms*150,state.food+kitchens*.65+farms*.85);
+  const operational=state.rooms.filter(roomOperational),treasuries=operational.filter(r=>r.role==='treasury').length,kitchens=operational.filter(r=>r.role==='kitchen').length,farms=operational.filter(r=>r.role==='farm').length,orchards=operational.filter(r=>r.role==='orchard').length,markets=operational.filter(r=>r.role==='market').length,stores=operational.filter(r=>r.role==='storehouse').length,forges=operational.filter(r=>r.role==='forge').length;
+  const capacity=500+treasuries*500+stores*250;state.gold=Math.min(capacity,state.gold+treasuries*1.5+forges*.35+markets*.25);state.food=Math.min(300+kitchens*200+farms*150+orchards*80,state.food+kitchens*.65+farms*.85+orchards*.35);
   updateSimHUD();
 }
 function sendKeeper(){
