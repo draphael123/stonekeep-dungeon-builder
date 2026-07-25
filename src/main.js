@@ -321,6 +321,7 @@ function getProgression(){
 }
 function updateProgression(){
   if(state.showcase)return;const p=getProgression(),old=state.progressionTier||1;state.progressionTier=p.tier;document.body.dataset.tier=p.tier;
+  if(state.layer==='surface')document.querySelector('#styleNote').textContent=p.tier>=4?'Fortified settlement architecture':'Camp architecture · grows with settlement';
   document.querySelector('#stageName').textContent=p.names[p.tier];document.querySelector('#stageCount').textContent=`${p.done} / ${p.total}`;document.querySelector('#stageProgress').style.width=`${Math.round(p.done/p.total*100)}%`;document.querySelector('#nextGoal').textContent=p.goal;document.querySelector('#unlockReward').textContent=p.reward;
   document.querySelectorAll('[data-tier]').forEach(b=>{const locked=Number(b.dataset.tier)>p.tier;b.disabled=locked;b.classList.toggle('locked',locked);b.title=locked?`Unlocks at settlement stage ${b.dataset.tier}`:'';});
   const locked=p.tier<4;document.querySelector('#undergroundLayer').disabled=locked;document.querySelector('#undergroundLock').textContent=locked?'LOCKED':'OPEN';
@@ -497,6 +498,7 @@ function setLayer(layer){
   state.layer=layer;state.selected=state.rooms.find(r=>(r.layer||'underground')===layer)?.id||null;state.selectedDecor=null;state.keeperPath=[];
   document.querySelector('#surfaceLayer').classList.toggle('active',layer==='surface');document.querySelector('#undergroundLayer').classList.toggle('active',layer==='underground');
   document.querySelector('#surfaceBlueprints').classList.toggle('hidden',layer!=='surface');document.querySelector('#undergroundBlueprints').classList.toggle('hidden',layer!=='underground');
+  const surfaceStyle=layer==='surface';document.querySelector('#styleName').textContent=surfaceStyle?'Frontier Timber':'Stone Keep Masonry';document.querySelector('#styleNote').textContent=surfaceStyle?(getProgression().tier>=4?'Fortified settlement architecture':'Camp architecture · grows with settlement'):'Underground dungeon architecture';document.querySelector('#ledgerStyle').textContent=surfaceStyle?'Frontier Timber':'Keep Masonry';document.querySelector('#styleSwatch').classList.toggle('masonry',!surfaceStyle);
   ground.material.color.set(layer==='surface'?0x334330:0x252c29);scene.background.set(layer==='surface'?0x78908a:theme.atmosphere.background);scene.fog.color.set(layer==='surface'?0x71827b:theme.atmosphere.fogColor);
   workers.forEach(w=>w.visible=layer==='surface'&&state.rooms.some(r=>r.layer==='surface'));
   terrainGroup.visible=layer==='surface';
