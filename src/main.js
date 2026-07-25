@@ -480,9 +480,9 @@ renderer.domElement.addEventListener('pointerdown',e=>{
   if(e.button===0){
     renderer.domElement.setPointerCapture?.(e.pointerId);
     if(state.choosingExploreStart){
-      const c=pointerCell(e),roomId=c?occupiedMap().get(cellKey(c.x,c.z)):null;
-      if(roomId!=null){state.exploreStart=c;state.choosingExploreStart=false;document.querySelector('#exploreMode').textContent='EXPLORE';setMode('explore');}
-      else toast('Choose a built floor, road, or room');
+      const c=pointerCell(e);
+      if(c&&(state.layer==='surface'||occupiedMap().has(cellKey(c.x,c.z)))){state.exploreStart=c;state.choosingExploreStart=false;document.querySelector('#exploreMode').textContent='EXPLORE';setMode('explore');}
+      else toast(state.layer==='surface'?'Choose a point on the ground':'Choose an excavated room');
       return;
     }
     if(state.tool!=='room'){
@@ -535,15 +535,15 @@ function setMode(mode){
   document.querySelector('#buildMode').classList.toggle('active',mode==='build');document.querySelector('#exploreMode').classList.toggle('active',mode==='explore');
   document.querySelector('.palette').style.display=mode==='build'?'block':'none';document.querySelector('.inspector').style.display=mode==='build'?'block':'none';document.querySelector('#crosshair').style.display=mode==='explore'?'block':'none';
   document.querySelector('#hint').textContent=mode==='build'?'LMB DRAG Place room · RMB DRAG Rotate view · WASD/ARROWS Pan · WHEEL Zoom':'CLICK Capture mouse · WASD Move · MOUSE Look · ESC Release · B Return to build';
-  if(mode==='explore'&&state.rooms.length){const active=state.rooms.filter(r=>(r.layer||'underground')===state.layer),r=active.find(x=>x.id===state.selected)||active[0],start=state.exploreStart||roomCenterCell(r);exploreCamera.position.set((start.x+.5)*CELL,1.65,(start.z+.5)*CELL);exploreYaw=r.d>=r.w?Math.PI:Math.PI/2;explorePitch=-.04;state.exploreStart=null;}
+  if(mode==='explore'&&(state.layer==='surface'||state.rooms.length)){const active=state.rooms.filter(r=>(r.layer||'underground')===state.layer),r=active.find(x=>x.id===state.selected)||active[0],start=state.exploreStart||(r?roomCenterCell(r):{x:0,z:0});exploreCamera.position.set((start.x+.5)*CELL,1.65,(start.z+.5)*CELL);exploreYaw=r?(r.d>=r.w?Math.PI:Math.PI/2):Math.PI;explorePitch=-.04;state.exploreStart=null;}
   if(mode==='build'&&document.pointerLockElement)document.exitPointerLock();
   world.traverse(o=>{if(o.userData.ceiling)o.visible=mode==='explore';});
   world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=mode==='explore'||o.userData.roomId!==state.cutawayRoom;});
   toast(mode==='build'?'Build mode':'Explore mode — click to look');
 }
 function chooseExploreStart(){
-  if(!state.rooms.some(r=>(r.layer||'underground')===state.layer)){toast('Build something before exploring');return;}
-  setMode('build');state.choosingExploreStart=true;document.querySelector('#exploreMode').textContent='PICK A START';document.querySelector('#hint').textContent='CLICK a built floor, road, or room to begin exploring there';toast('Choose your exploration starting point');
+  if(state.layer==='underground'&&!state.rooms.some(r=>(r.layer||'underground')===state.layer)){toast('Excavate a room before exploring underground');return;}
+  setMode('build');state.choosingExploreStart=true;document.querySelector('#exploreMode').textContent='PICK A START';document.querySelector('#hint').textContent=state.layer==='surface'?'CLICK anywhere on the landscape to begin exploring':'CLICK an excavated room to begin exploring';toast('Choose your exploration starting point');
 }
 function setLayer(layer){
   if(layer==='underground'&&getProgression().tier<4){toast('Grow to a village before excavating underground');return;}
@@ -646,7 +646,7 @@ const tutorialSteps = [
   { target:'.resource-bar', kicker:'STEP THREE · PROVIDE', title:'Watch gold, food, and workers.', body:'Every building costs gold. Farms replenish food, while later workshops and storehouses strengthen the settlement economy. Start compactly so resources last.' },
   { target:'.inspector', kicker:'STEP FOUR · GROW', title:'Complete milestones to unlock more.', body:'A cottage and farm advance the camp into a hamlet. Each new stage reveals only the buildings and management tools that now matter.' },
   { target:'.layer-switch', kicker:'STEP FIVE · DELVE LATER', title:'The underground is earned.', body:'Underground construction stays locked while your settlement is fragile. Establish production and grow into a village; then the first dungeon chamber can be excavated.' },
-  { target:'.mode-switch', kicker:'STEP SIX · WALK THE SETTLEMENT', title:'Choose exactly where exploration begins.', body:'Choose Explore, then click any built floor, road, or room as your starting point. Click again to capture the mouse, move with WASD, and press B to return to Build mode.' },
+  { target:'.mode-switch', kicker:'STEP SIX · WALK THE SETTLEMENT', title:'Choose exactly where exploration begins.', body:'Choose Explore, then click anywhere on the surface landscape as your starting point. Roads make travel faster but are never required. Underground starts must be inside excavated space.' },
   { target:'.actions', kicker:'STEP SEVEN · KEEP YOUR PROGRESS', title:'Save the whole stronghold.', body:'Save preserves the surface, underground, resources, furnishings, and growth stage in this browser. Continue returns to that same settlement.' },
   { target:'.inspector', kicker:'YOUR FIRST TASK', title:'Raise the Great Hall.', body:'Build it at least 3 by 3 tiles. Every enclosed building receives a roof. Select it and choose Open interior whenever you want to furnish the cutaway.' }
 ];
@@ -734,7 +734,7 @@ function tick(){
     exploreCamera.rotation.order='YXZ';exploreCamera.rotation.y=exploreYaw;exploreCamera.rotation.x=explorePitch;
     const f=new THREE.Vector3(-Math.sin(exploreYaw),0,-Math.cos(exploreYaw)),r=new THREE.Vector3(-f.z,0,f.x),m=new THREE.Vector3();
     if(keys.has('KeyW'))m.add(f);if(keys.has('KeyS'))m.sub(f);if(keys.has('KeyD'))m.add(r);if(keys.has('KeyA'))m.sub(r);
-    if(m.lengthSq()){const cx0=Math.floor(exploreCamera.position.x/CELL),cz0=Math.floor(exploreCamera.position.z/CELL),next=exploreCamera.position.clone().addScaledVector(m.normalize(),speed*terrainSpeedAt(cx0,cz0)*dt),cx=Math.floor(next.x/CELL),cz=Math.floor(next.z/CELL);if(occupiedMap().has(cellKey(cx,cz)))exploreCamera.position.copy(next);}
+    if(m.lengthSq()){const cx0=Math.floor(exploreCamera.position.x/CELL),cz0=Math.floor(exploreCamera.position.z/CELL),next=exploreCamera.position.clone().addScaledVector(m.normalize(),speed*terrainSpeedAt(cx0,cz0)*dt),cx=Math.floor(next.x/CELL),cz=Math.floor(next.z/CELL);if(state.layer==='surface'){next.x=Math.max(-48,Math.min(48,next.x));next.z=Math.max(-48,Math.min(48,next.z));exploreCamera.position.copy(next);}else if(occupiedMap().has(cellKey(cx,cz)))exploreCamera.position.copy(next);}
     exploreCamera.position.y=1.65;
   }
   renderer.render(scene,camera);requestAnimationFrame(tick);
