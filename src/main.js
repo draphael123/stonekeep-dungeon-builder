@@ -210,11 +210,23 @@ function addSurfaceBuilding(group,room){
   addBox(group,[w,.16,d],[cx,.03,cz],mats.floor);
   const wallH=room.role==='watchtower'?4.2:2.35;
   const wallMat=room.role==='forge'?mats.wall:mats.wood;
+  const plaster=new THREE.MeshStandardMaterial({color:room.role==='hall'?0x706451:0x85765e,roughness:.95}),windowGlow=new THREE.MeshStandardMaterial({color:0xe4a95b,emissive:0xb76522,emissiveIntensity:1.8,roughness:.4});
   addBox(group,[w,wallH,.18],[cx,wallH/2,room.z*CELL+.1],wallMat);addBox(group,[.18,wallH,d],[room.x*CELL+.1,wallH/2,cz],wallMat);addBox(group,[.18,wallH,d],[(room.x+room.w)*CELL-.1,wallH/2,cz],wallMat);
   const doorway=1.35,sideW=Math.max(.3,(w-doorway)/2);addBox(group,[sideW,wallH,.18],[cx-(doorway+sideW)/2,wallH/2,(room.z+room.d)*CELL-.1],wallMat);addBox(group,[sideW,wallH,.18],[cx+(doorway+sideW)/2,wallH/2,(room.z+room.d)*CELL-.1],wallMat);addBox(group,[doorway,.48,.18],[cx,wallH-.24,(room.z+room.d)*CELL-.1],wallMat);
+  // Stone footings, timber frame, and an open iron-bound door give buildings a hand-built silhouette.
+  for(let x=room.x*CELL+.42;x<(room.x+room.w)*CELL-.2;x+=.72){const stone=addBox(group,[.62,.28,.3],[x,.14,room.z*CELL+.1],Math.floor(x*2)%2?mats.wallTop:mats.wall);stone.rotation.y=(x%1)*.08;}
+  for(const x of [room.x*CELL+.18,(room.x+room.w)*CELL-.18])for(const z of [room.z*CELL+.18,(room.z+room.d)*CELL-.18])addBox(group,[.18,wallH+.08,.18],[x,wallH/2,z],mats.wood);
+  addBox(group,[w-.28,.16,.16],[cx,wallH*.72,room.z*CELL+.04],mats.wood);addBox(group,[.16,.16,d-.28],[room.x*CELL+.04,wallH*.72,cz],mats.wood);addBox(group,[.16,.16,d-.28],[(room.x+room.w)*CELL-.04,wallH*.72,cz],mats.wood);
+  const door=addBox(group,[1.15,1.75,.12],[cx+.58,.9,(room.z+room.d)*CELL-.02],mats.wood);door.rotation.y=-1.05;addBox(group,[.08,1.76,.15],[cx+.16,.9,(room.z+room.d)*CELL-.02],mats.brass);
+  const addWindow=(x,z,side)=>{const frame=new THREE.Group(),pane=addBox(frame,side==='n'||side==='s'?[.62,.68,.05]:[.05,.68,.62],[0,0,0],windowGlow,false);addBox(frame,side==='n'||side==='s'?[.72,.08,.08]:[.08,.08,.72],[0,.39,0],mats.wood);addBox(frame,side==='n'||side==='s'?[.08,.82,.08]:[.08,.82,.08],[0,0,0],mats.wood);frame.position.set(x,1.35,z);group.add(frame);};
+  if(room.role!=='watchtower'){addWindow(cx,room.z*CELL+.0,'n');if(room.d>=2){addWindow(room.x*CELL+.0,cz,'w');addWindow((room.x+room.w)*CELL,cz,'e');}}
   const roof=new THREE.Group();roof.userData.surfaceRoof=true;roof.userData.roomId=room.id;const roofMat=room.role==='hall'?mats.banner:mats.rug;
   const left=addBox(roof,[w*.58,.16,d+.35],[cx-w*.22,wallH+.38,cz],roofMat);left.rotation.z=.52;const right=addBox(roof,[w*.58,.16,d+.35],[cx+w*.22,wallH+.38,cz],roofMat);right.rotation.z=-.52;
+  addBox(roof,[.18,.2,d+.58],[cx,wallH+.72,cz],mats.wood);
+  for(let row=0;row<4;row++)for(const side of [-1,1]){const strip=addBox(roof,[w*.28,.055,d+.42],[cx+side*(.22+row*.105)*w,wallH+.23+row*.18,cz],row%2?roofMat:mats.wood,false);strip.rotation.z=-side*.52;}
   roof.visible=state.mode==='explore'||state.cutawayRoom!==room.id;group.add(roof);
+  if(room.role==='cottage'){const chimney=addBox(group,[.42,wallH+1,.42],[cx+w*.28,(wallH+1)/2,cz-d*.18],mats.wallTop);for(let i=0;i<4;i++){const smoke=new THREE.Mesh(new THREE.SphereGeometry(.13+i*.035,8,6),new THREE.MeshStandardMaterial({color:0x8d928c,transparent:true,opacity:.2-i*.03,depthWrite:false}));smoke.position.set(chimney.position.x+.08*i,wallH+1+i*.3,chimney.position.z);smoke.userData.phase=i*1.2;group.add(smoke);animatedFlames.push(smoke);}}
+  if(room.role==='hall'){for(const x of [cx-w*.32,cx+w*.32]){const banner=new THREE.Mesh(new THREE.PlaneGeometry(.72,1.35),mats.banner);banner.position.set(x,1.45,(room.z+room.d)*CELL+.015);group.add(banner);}}
   if(room.role==='forge'){const chimney=addBox(group,[.48,wallH+1,.48],[cx+w*.28,(wallH+1)/2,cz+d*.25],mats.wallTop);const glow=new THREE.PointLight(0xff7428,4,10,2);glow.userData.baseIntensity=4;glow.position.set(cx,1,cz);group.add(glow);}
   if(room.role==='storehouse')for(let i=0;i<4;i++)addBox(group,[.65,.65,.65],[cx+(i%2-.5)*.8,.42,cz+(Math.floor(i/2)-.5)*.8],mats.wood);
   if(room.role==='watchtower'){const top=addBox(group,[w+.5,.22,d+.5],[cx,wallH+.05,cz],mats.wallTop);for(const [x,z] of [[cx-w/2,cz-d/2],[cx+w/2,cz-d/2],[cx-w/2,cz+d/2],[cx+w/2,cz+d/2]])addBox(group,[.35,.7,.35],[x,wallH+.45,z],mats.wall);}
