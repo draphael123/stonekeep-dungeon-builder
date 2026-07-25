@@ -9,7 +9,7 @@ const roadMaterial=new THREE.MeshStandardMaterial({color:0x5a4b36,roughness:1,me
 const roadEdgeMaterial=new THREE.MeshStandardMaterial({color:0x71634d,roughness:.95});
 const soilMaterial=new THREE.MeshStandardMaterial({color:0x3f2b1d,roughness:1}),furrowMaterial=new THREE.MeshStandardMaterial({color:0x65432b,roughness:1}),cropMaterial=new THREE.MeshStandardMaterial({color:0x78914b,roughness:1}),canvasMaterial=new THREE.MeshStandardMaterial({color:0xa76a45,roughness:1,side:THREE.DoubleSide});
 const meadowMaterial=new THREE.MeshStandardMaterial({color:0x43583c,roughness:1}),dryGrassMaterial=new THREE.MeshStandardMaterial({color:0x706b43,roughness:1}),waterMaterial=new THREE.MeshStandardMaterial({color:0x315a5d,roughness:.24,metalness:.12,transparent:true,opacity:.82}),flowerMaterial=new THREE.MeshStandardMaterial({color:0xb99a65,roughness:.9});
-const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'cottage', layer:'surface', mode: 'build', progressionTier:1, choosingExploreStart:false, exploreStart:null, dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:180, food:60, timeScale:1, simTime:0, simAccumulator:0 };
+const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'cottage', layer:'surface', mode: 'build', progressionTier:1, choosingExploreStart:false, exploreStart:null, cutawayRoom:null, dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:180, food:60, timeScale:1, simTime:0, simAccumulator:0 };
 const ROOM_TYPES={
   unassigned:{name:'Unassigned Chamber',cost:5,purpose:'A flexible chamber with no production. Assign its purpose later.',needs:'No furnishing requirement'},
   treasury:{name:'Treasury',cost:6,purpose:'Stores more gold and generates income while operational.',needs:'Requires a chest or gold pile'},
@@ -199,7 +199,7 @@ function addSurfaceBuilding(group,room){
   if(room.role==='well'){addCylinder(group,Math.min(w,d)*.28,.55,[cx,.28,cz],mats.wallTop,16);const opening=addCylinder(group,Math.min(w,d)*.19,.04,[cx,.58,cz],mats.soot,16);for(const x of [-.55,.55])addBox(group,[.12,1.8,.12],[cx+x,.9,cz],mats.wood);addBox(group,[1.35,.12,.12],[cx,1.7,cz],mats.wood);const roof=addBox(group,[1.7,.1,1.05],[cx,1.9,cz],mats.rug);roof.rotation.z=.08;return;}
   if(room.role==='market'){addBox(group,[w,.07,d],[cx,.015,cz],roadMaterial,false);for(const x of [-w*.35,w*.35])for(const z of [-d*.32,d*.32])addBox(group,[.1,1.8,.1],[cx+x,.9,cz+z],mats.wood);const awning=addBox(group,[w*.85,.1,d*.82],[cx,1.82,cz],canvasMaterial);awning.rotation.z=.05;addBox(group,[w*.72,.55,.48],[cx,.45,cz],mats.wood);for(let i=0;i<5;i++)addBox(group,[.18,.12,.18],[cx+(i-2)*.28,.8,cz],i%2?cropMaterial:mats.brass);return;}
   if(room.role==='orchard'){addBox(group,[w,.06,d],[cx,.01,cz],mats.moss,false);for(let x=room.x+.5;x<room.x+room.w;x+=1.15)for(let z=room.z+.5;z<room.z+room.d;z+=1.15){addCylinder(group,.11,1.15,[x*CELL,.58,z*CELL],mats.wood,8);const crown=new THREE.Mesh(new THREE.SphereGeometry(.5,9,7),cropMaterial);crown.position.set(x*CELL,1.35,z*CELL);crown.castShadow=true;group.add(crown);for(let i=0;i<3;i++){const fruit=new THREE.Mesh(new THREE.SphereGeometry(.055,6,4),mats.banner);fruit.position.set(x*CELL+(i-1)*.2,1.3+(i%2)*.18,z*CELL-.38);group.add(fruit);}}return;}
-  if(room.role==='lumberyard'){addBox(group,[w,.1,d],[cx,.03,cz],mats.moss,false);for(let i=0;i<8;i++){const log=addCylinder(group,.16,1.4,[cx+(i%4-.5)*.42,.2,cz+(Math.floor(i/4)-.5)*.55],mats.wood,9);log.rotation.z=Math.PI/2;}return;}
+  if(room.role==='lumberyard'){addBox(group,[w,.1,d],[cx,.03,cz],mats.moss,false);for(let i=0;i<8;i++){const log=addCylinder(group,.16,1.4,[cx+(i%4-.5)*.42,.2,cz+(Math.floor(i/4)-.5)*.55],mats.wood,9);log.rotation.z=Math.PI/2;}for(const x of [-w*.38,w*.38])for(const z of [-d*.34,d*.34])addBox(group,[.12,1.75,.12],[cx+x,.88,cz+z],mats.wood);const shelter=addBox(group,[w*.9,.12,d*.82],[cx,1.78,cz],mats.rug);shelter.rotation.z=.08;return;}
   addBox(group,[w,.16,d],[cx,.03,cz],mats.floor);
   const wallH=room.role==='watchtower'?4.2:2.35;
   const wallMat=room.role==='forge'?mats.wall:mats.wood;
@@ -207,7 +207,7 @@ function addSurfaceBuilding(group,room){
   const doorway=1.35,sideW=Math.max(.3,(w-doorway)/2);addBox(group,[sideW,wallH,.18],[cx-(doorway+sideW)/2,wallH/2,(room.z+room.d)*CELL-.1],wallMat);addBox(group,[sideW,wallH,.18],[cx+(doorway+sideW)/2,wallH/2,(room.z+room.d)*CELL-.1],wallMat);addBox(group,[doorway,.48,.18],[cx,wallH-.24,(room.z+room.d)*CELL-.1],wallMat);
   const roof=new THREE.Group();roof.userData.surfaceRoof=true;roof.userData.roomId=room.id;const roofMat=room.role==='hall'?mats.banner:mats.rug;
   const left=addBox(roof,[w*.58,.16,d+.35],[cx-w*.22,wallH+.38,cz],roofMat);left.rotation.z=.52;const right=addBox(roof,[w*.58,.16,d+.35],[cx+w*.22,wallH+.38,cz],roofMat);right.rotation.z=-.52;
-  roof.visible=state.mode==='explore'||state.selected!==room.id;group.add(roof);
+  roof.visible=state.mode==='explore'||state.cutawayRoom!==room.id;group.add(roof);
   if(room.role==='forge'){const chimney=addBox(group,[.48,wallH+1,.48],[cx+w*.28,(wallH+1)/2,cz+d*.25],mats.wallTop);const glow=new THREE.PointLight(0xff7428,4,10,2);glow.userData.baseIntensity=4;glow.position.set(cx,1,cz);group.add(glow);}
   if(room.role==='storehouse')for(let i=0;i<4;i++)addBox(group,[.65,.65,.65],[cx+(i%2-.5)*.8,.42,cz+(Math.floor(i/2)-.5)*.8],mats.wood);
   if(room.role==='watchtower'){const top=addBox(group,[w+.5,.22,d+.5],[cx,wallH+.05,cz],mats.wallTop);for(const [x,z] of [[cx-w/2,cz-d/2],[cx+w/2,cz-d/2],[cx-w/2,cz+d/2],[cx+w/2,cz+d/2]])addBox(group,[.35,.7,.35],[x,wallH+.45,z],mats.wall);}
@@ -379,6 +379,7 @@ function updateSelection() {
   if(d){const ring=new THREE.Mesh(new THREE.RingGeometry(.72,.86,32),new THREE.MeshBasicMaterial({color:0xe1b85b,side:THREE.DoubleSide,transparent:true,opacity:.9}));ring.rotation.x=-Math.PI/2;ring.position.set((d.x+.5)*CELL,.22,(d.z+.5)*CELL);selectionGroup.add(ring);}
   else if(r){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w*CELL+.12,.08,r.d*CELL+.12),mats.selected);m.position.set((r.x+r.w/2)*CELL,.25,(r.z+r.d/2)*CELL);selectionGroup.add(m);}
   document.querySelector('#rotateBtn').disabled=!r&&!d; document.querySelector('#deleteBtn').disabled=!r&&!d;
+  const canCutaway=!!r&&state.layer==='surface'&&!['road','farm','fence','well','market','orchard','lumberyard'].includes(r.role);document.querySelector('#cutawayBtn').disabled=!canCutaway||!!d;document.querySelector('#cutawayBtn').style.display=state.layer==='surface'?'flex':'none';document.querySelector('#cutawayBtn span:nth-child(2)').textContent=state.cutawayRoom===r?.id?'Close roof':'Open interior';
   document.querySelector('#selectionLabel').textContent=d?'SELECTED DECORATION':'SELECTED ROOM';
   document.querySelector('#decorOptions').classList.toggle('hidden',!d);
   document.querySelector('#rotateBtn span:nth-child(2)').textContent=d?'Turn 90°':'Rotate';
@@ -390,7 +391,7 @@ function updateSelection() {
   document.querySelector('#dressRoomBtn').disabled=!r||!!d||r?.role==='heart'||r?.role==='road'||r?.role==='farm'||r?.role==='lumberyard';
   document.querySelector('#doorBtn').disabled=!r||!!d||state.layer==='surface';document.querySelector('#pathTestBtn').disabled=!r||!!d;
   document.querySelector('#doorBtn span:nth-child(2)').textContent=r?.doorsOpen===false?'Open room doors':'Close room doors';
-  world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=state.mode==='explore'||o.userData.roomId!==r?.id;});
+  world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=state.mode==='explore'||o.userData.roomId!==state.cutawayRoom;});
 }
 function updateHUD(){const activeRooms=state.rooms.filter(r=>(r.layer||'underground')===state.layer);document.querySelector('#roomCount').textContent=activeRooms.length;const n=activeRooms.reduce((s,r)=>s+r.w*r.d,0);document.querySelector('#tileCount').textContent=`${n} tile${n===1?'':'s'}`;document.querySelector('#decorCount').textContent=state.decorations.filter(d=>activeRooms.some(r=>r.id===d.roomId)).length;document.querySelector('#operationalCount').textContent=activeRooms.filter(roomOperational).length;updateSimHUD();}
 function updateSimHUD(){
@@ -517,7 +518,7 @@ function editDecor(mutator,message){const d=state.decorations.find(x=>x.id===sta
 function deleteSelected(){if(state.selectedDecor!=null){state.decorations=state.decorations.filter(d=>d.id!==state.selectedDecor);state.selectedDecor=null;buildWorld();if(preferences.autosave)save(true);toast('Decoration removed');return;}if(!state.selected)return;const room=state.rooms.find(r=>r.id===state.selected);if(room?.role==='heart'){toast('The dungeon heart cannot be demolished');return;}state.gold+=Math.floor((room?.w||0)*(room?.d||0)*2.5);state.rooms=state.rooms.filter(r=>r.id!==state.selected);state.decorations=state.decorations.filter(d=>d.roomId!==state.selected);state.selected=null;buildWorld();if(preferences.autosave)save(true);toast('Room demolished · partial refund');}
 function rotateSelected(){if(state.selectedDecor!=null){editDecor(d=>d.rotation=(d.rotation||0)+Math.PI/2,'Decoration rotated');return;}const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;const nr={...r,w:r.d,d:r.w};nr.x=Math.round(r.x+(r.w-nr.w)/2);nr.z=Math.round(r.z+(r.d-nr.d)/2);if(isValidRect(nr,r.id)){Object.assign(r,nr);buildWorld();if(preferences.autosave)save(true);toast('Room rotated');}else toast('Rotation blocked');}
 function save(silent=false){localStorage.setItem('stonekeep-save',JSON.stringify({version:5,theme:theme.id,rooms:state.rooms,decorations:state.decorations,nextId:state.nextId,nextDecorId:state.nextDecorId,gold:state.gold,food:state.food,activeLayer:state.layer,progressionTier:state.progressionTier}));if(!silent)toast('Stronghold saved locally');}
-function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved stronghold found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.decorations=data.decorations||[];state.nextId=data.nextId||1;state.nextDecorId=data.nextDecorId||1;state.gold=data.gold??500;state.food=data.food??100;state.layer=data.activeLayer||(state.rooms.some(r=>r.layer==='surface')?'surface':'underground');state.selected=null;state.selectedDecor=null;state.showcase=false;setLayer(state.layer);spawnWorkers();toast('Stronghold restored');}catch{toast('Save data could not be read');}}
+function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved stronghold found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.decorations=data.decorations||[];state.nextId=data.nextId||1;state.nextDecorId=data.nextDecorId||1;state.gold=data.gold??500;state.food=data.food??100;state.layer=data.activeLayer||(state.rooms.some(r=>r.layer==='surface')?'surface':'underground');state.selected=null;state.selectedDecor=null;state.cutawayRoom=null;state.showcase=false;setLayer(state.layer);spawnWorkers();toast('Stronghold restored');}catch{toast('Save data could not be read');}}
 
 function setMode(mode){
   state.mode=mode;camera=mode==='build'?buildCamera:exploreCamera;grid.visible=mode==='build'&&preferences.showGrid;selectionGroup.visible=mode==='build';previewGroup.clear();
@@ -527,7 +528,7 @@ function setMode(mode){
   if(mode==='explore'&&state.rooms.length){const active=state.rooms.filter(r=>(r.layer||'underground')===state.layer),r=active.find(x=>x.id===state.selected)||active[0],start=state.exploreStart||roomCenterCell(r);exploreCamera.position.set((start.x+.5)*CELL,1.65,(start.z+.5)*CELL);exploreYaw=r.d>=r.w?Math.PI:Math.PI/2;explorePitch=-.04;state.exploreStart=null;}
   if(mode==='build'&&document.pointerLockElement)document.exitPointerLock();
   world.traverse(o=>{if(o.userData.ceiling)o.visible=mode==='explore';});
-  world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=mode==='explore'||o.userData.roomId!==state.selected;});
+  world.traverse(o=>{if(o.userData.surfaceRoof)o.visible=mode==='explore'||o.userData.roomId!==state.cutawayRoom;});
   toast(mode==='build'?'Build mode':'Explore mode — click to look');
 }
 function chooseExploreStart(){
@@ -632,7 +633,7 @@ const tutorialSteps = [
   { target:'.layer-switch', kicker:'STEP FIVE · DELVE LATER', title:'The underground is earned.', body:'Underground construction stays locked while your settlement is fragile. Establish production and grow into a village; then the first dungeon chamber can be excavated.' },
   { target:'.mode-switch', kicker:'STEP SIX · WALK THE SETTLEMENT', title:'Choose exactly where exploration begins.', body:'Choose Explore, then click any built floor, road, or room as your starting point. Click again to capture the mouse, move with WASD, and press B to return to Build mode.' },
   { target:'.actions', kicker:'STEP SEVEN · KEEP YOUR PROGRESS', title:'Save the whole stronghold.', body:'Save preserves the surface, underground, resources, furnishings, and growth stage in this browser. Continue returns to that same settlement.' },
-  { target:'.inspector', kicker:'YOUR FIRST TASK', title:'Raise the Great Hall.', body:'Build it at least 3 by 3 tiles. Select a finished building to remove its roof and furnish the interior; deselect it to restore the complete exterior.' }
+  { target:'.inspector', kicker:'YOUR FIRST TASK', title:'Raise the Great Hall.', body:'Build it at least 3 by 3 tiles. Every enclosed building receives a roof. Select it and choose Open interior whenever you want to furnish the cutaway.' }
 ];
 let tutorialIndex=0;
 function showTutorialStep(index) {
@@ -654,6 +655,7 @@ function endTutorial() {
   document.querySelector('#tutorial').classList.add('hidden');document.querySelectorAll('.tutorial-focus').forEach(e=>e.classList.remove('tutorial-focus'));localStorage.setItem('stonekeep-tutorial-complete','true');toast('Tutorial complete — begin building');
 }
 function startNewDungeon() {
+  state.cutawayRoom=null;
   state.rooms=[];state.decorations=[];state.selected=null;state.selectedDecor=null;state.nextId=1;state.nextDecorId=1;state.gold=260;state.food=60;state.progressionTier=1;state.timeScale=1;state.simTime=0;state.showcase=false;state.layer='surface';setLayer('surface');document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');selectRoomType('hall');cam.target.set(0,0,0);cam.distance=23;updateBuildCamera();toast('Open land awaits · build a Great Hall');
 }
 function selectTool(tool){
@@ -666,6 +668,7 @@ function selectRoomType(role){
 document.querySelector('#buildMode').onclick=()=>{state.choosingExploreStart=false;document.querySelector('#exploreMode').textContent='EXPLORE';setMode('build');};document.querySelector('#exploreMode').onclick=chooseExploreStart;
 document.querySelector('#surfaceLayer').onclick=()=>setLayer('surface');document.querySelector('#undergroundLayer').onclick=()=>setLayer('underground');
 document.querySelector('#deleteBtn').onclick=deleteSelected;document.querySelector('#rotateBtn').onclick=rotateSelected;document.querySelector('#saveBtn').onclick=save;document.querySelector('#loadBtn').onclick=load;
+document.querySelector('#cutawayBtn').onclick=()=>{const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;state.cutawayRoom=state.cutawayRoom===r.id?null:r.id;buildWorld();toast(state.cutawayRoom?'Interior opened for furnishing':'Roof closed');};
 document.querySelector('#rotateFineBtn').onclick=()=>editDecor(d=>d.rotation=(d.rotation||0)+Math.PI/12,'Turned 15°');
 document.querySelector('#scaleDownBtn').onclick=()=>editDecor(d=>d.scale=Math.max(.65,(d.scale||1)-.1),'Decoration resized');
 document.querySelector('#scaleUpBtn').onclick=()=>editDecor(d=>d.scale=Math.min(1.4,(d.scale||1)+.1),'Decoration resized');
