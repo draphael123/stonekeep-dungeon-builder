@@ -47,6 +47,7 @@ For a production build, run `npm run build`, then `npm run preview`.
 - Launch menu with new-dungeon, continue, tutorial, and settings options
 - Seven-step guided tutorial that highlights and explains the live build controls
 - Persistent graphics quality, master volume, camera speed, and reduced-motion settings
+- Cinematic title-screen showcase plus procedurally textured masonry, architectural pillars, banners, rugs, furniture, treasure chests, barrels, rubble, candles, and room-aware warm lighting
 
 ## Architecture
 

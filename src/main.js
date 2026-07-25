@@ -5,7 +5,7 @@ import { THEMES, makeThemeMaterials } from './themes.js';
 const CELL = 2, WALL_H = 2.8, WALL_T = .24;
 const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
-const state = { rooms: [], selected: null, mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1 };
+const state = { rooms: [], selected: null, mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, showcase: true };
 const preferences = { quality: 'high', volume: 70, speed: 100, reduceMotion: false };
 const keys = new Set();
 
@@ -16,13 +16,13 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.38;
 document.querySelector('#game').append(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(theme.atmosphere.background);
 scene.fog = new THREE.Fog(theme.atmosphere.fogColor, theme.atmosphere.fogNear, theme.atmosphere.fogFar);
-scene.add(new THREE.HemisphereLight(theme.atmosphere.ambientColor, 0x0b0907, theme.atmosphere.ambientIntensity));
+scene.add(new THREE.HemisphereLight(theme.atmosphere.ambientColor, 0x0b0907, theme.atmosphere.ambientIntensity*.82));
 const sun = new THREE.DirectionalLight(theme.atmosphere.sunColor, theme.atmosphere.sunIntensity);
 sun.position.set(-18, 28, 14); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = sun.shadow.camera.bottom = -35; sun.shadow.camera.right = sun.shadow.camera.top = 35;
@@ -35,6 +35,7 @@ const grid = new THREE.GridHelper(80, 40, 0x86754f, 0x353b38);
 grid.position.y = .012; grid.material.transparent = true; grid.material.opacity = .6; scene.add(grid);
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(100,100), new THREE.MeshStandardMaterial({color:0x171b19,roughness:1}));
 ground.rotation.x = -Math.PI/2; ground.position.y=-.08; ground.receiveShadow=true; scene.add(ground);
+const moonGlow=new THREE.PointLight(0x7897a8,2.2,46,2);moonGlow.position.set(-10,13,-15);scene.add(moonGlow);
 
 const buildCamera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, .1, 150);
 const cam = { target: new THREE.Vector3(), yaw: Math.PI/4, pitch: .78, distance: 31 };
@@ -74,7 +75,36 @@ function makeTorch(group,x,z,side) {
   const [ox,,oz]=offsets[side]; const holder=addBox(group,[.08,.45,.08],[x+ox,1.38,z+oz],mats.trim);
   holder.rotation[side==='n'||side==='s'?'x':'z']=side==='n'||side==='w'?.35:-.35;
   const flame=new THREE.Mesh(new THREE.SphereGeometry(.09,8,6),mats.flame); flame.scale.y=1.7; flame.position.set(x+ox*1.8,1.69,z+oz*1.8); group.add(flame);
-  const light=new THREE.PointLight(0xff8a32,2.2,8,2); light.position.copy(flame.position); light.castShadow=false; group.add(light);
+  const light=new THREE.PointLight(0xff8a32,3.4,10,2); light.position.copy(flame.position); light.castShadow=false; group.add(light);
+}
+function addCylinder(group,r,depth,pos,material,segments=10){
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,depth,segments),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;
+}
+function addRoomProps(group,room) {
+  const cx=(room.x+room.w/2)*CELL,cz=(room.z+room.d/2)*CELL,min=Math.min(room.w,room.d);
+  const roomFill=new THREE.PointLight(0xd98a45,1.15,Math.max(room.w,room.d)*CELL*1.35,2);roomFill.position.set(cx,2.25,cz);group.add(roomFill);
+  // Corner pillars give every chamber a stronger silhouette.
+  if(room.w>1&&room.d>1) for(const [x,z] of [[room.x*CELL+.18,room.z*CELL+.18],[(room.x+room.w)*CELL-.18,room.z*CELL+.18],[room.x*CELL+.18,(room.z+room.d)*CELL-.18],[(room.x+room.w)*CELL-.18,(room.z+room.d)*CELL-.18]]){
+    addCylinder(group,.22,WALL_H+.28,[x,(WALL_H+.28)/2,z],mats.wallTop,8);addBox(group,[.62,.12,.62],[x,.06,z],mats.wallTop);addBox(group,[.54,.13,.54],[x,WALL_H+.12,z],mats.wallTop);
+  }
+  if(min>=3){
+    // Worn crimson runner with a brass border.
+    addBox(group,[Math.max(1.4,(room.w-1)*CELL),.025,1.18],[cx,.13,cz],mats.rug,false);
+    addBox(group,[Math.max(1.25,(room.w-1)*CELL)-.15,.028,.82],[cx,.147,cz],mats.banner,false);
+  }
+  if(room.w*room.d>=12){
+    // Heavy feasting/war table and candles.
+    addBox(group,[2.45,.16,.9],[cx,.9,cz],mats.wood);for(const x of [-.9,.9])for(const z of [-.3,.3])addBox(group,[.13,.82,.13],[cx+x,.45,cz+z],mats.wood);
+    for(const x of [-.65,.65]){addCylinder(group,.035,.34,[cx+x,1.14,cz],mats.brass,8);const f=new THREE.Mesh(new THREE.SphereGeometry(.055,7,5),mats.flame);f.position.set(cx+x,1.34,cz);group.add(f);}
+  } else if(room.w*room.d>=6) {
+    // Iron-bound treasure chest.
+    addBox(group,[.95,.48,.58],[cx,.38,cz],mats.wood);addBox(group,[1.01,.08,.62],[cx,.63,cz],mats.brass);addBox(group,[.08,.42,.64],[cx,.39,cz],mats.brass);
+  }
+  // Barrels and loose masonry are deterministic per-room.
+  if(room.w>=2){const bx=(room.x+room.w-.48)*CELL,bz=(room.z+.5)*CELL;addCylinder(group,.32,.72,[bx,.38,bz],mats.wood,12);addCylinder(group,.335,.05,[bx,.28,bz],mats.brass,12);addCylinder(group,.335,.05,[bx,.54,bz],mats.brass,12);}
+  if(room.id%2===0){for(let i=0;i<3;i++){const rock=addBox(group,[.22+i*.06,.12+i*.03,.18+i*.04],[room.x*CELL+.5+i*.22,.15,(room.z+room.d)*CELL-.48-i*.12],mats.wallTop);rock.rotation.y=i*.7;}}
+  // Heraldic banner on the north wall.
+  if(room.w>=3){const banner=new THREE.Mesh(new THREE.PlaneGeometry(1.05,1.45),mats.banner);banner.position.set(cx,1.75,room.z*CELL+.14);banner.rotation.y=Math.PI;group.add(banner);addBox(group,[1.3,.07,.07],[cx,2.49,room.z*CELL+.12],mats.brass);}
 }
 function buildWorld() {
   world.clear();
@@ -104,6 +134,7 @@ function buildWorld() {
         }
       }
     }
+    addRoomProps(g,room);
   }
   updateSelection();
   updateHUD();
@@ -185,7 +216,7 @@ renderer.domElement.addEventListener('wheel',e=>{if(state.mode==='build'){cam.di
 function deleteSelected(){if(!state.selected)return;state.rooms=state.rooms.filter(r=>r.id!==state.selected);state.selected=null;buildWorld();toast('Room demolished');}
 function rotateSelected(){const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;const nr={...r,w:r.d,d:r.w};nr.x=Math.round(r.x+(r.w-nr.w)/2);nr.z=Math.round(r.z+(r.d-nr.d)/2);if(isValidRect(nr,r.id)){Object.assign(r,nr);buildWorld();toast('Room rotated');}else toast('Rotation blocked');}
 function save(){localStorage.setItem('stonekeep-save',JSON.stringify({version:1,theme:theme.id,rooms:state.rooms,nextId:state.nextId}));toast('Dungeon saved locally');}
-function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved dungeon found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.nextId=data.nextId||1;state.selected=null;buildWorld();toast('Dungeon restored');}catch{toast('Save data could not be read');}}
+function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved dungeon found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.nextId=data.nextId||1;state.selected=null;state.showcase=false;buildWorld();toast('Dungeon restored');}catch{toast('Save data could not be read');}}
 
 function setMode(mode){
   state.mode=mode;camera=mode==='build'?buildCamera:exploreCamera;grid.visible=mode==='build';selectionGroup.visible=mode==='build';previewGroup.clear();
@@ -218,20 +249,22 @@ function showTutorialStep(index) {
   document.querySelector('#tutorialNext').textContent=tutorialIndex===tutorialSteps.length-1?'START BUILDING':'NEXT';
 }
 function startTutorial() {
+  if(state.showcase){state.rooms=[];state.nextId=1;state.showcase=false;buildWorld();}
+  document.body.classList.remove('menu-open');
   document.querySelector('#mainMenu').classList.add('hidden');document.querySelector('#help').classList.add('hidden');document.querySelector('#settings').classList.add('hidden');document.querySelector('#tutorial').classList.remove('hidden');setMode('build');showTutorialStep(0);
 }
 function endTutorial() {
   document.querySelector('#tutorial').classList.add('hidden');document.querySelectorAll('.tutorial-focus').forEach(e=>e.classList.remove('tutorial-focus'));localStorage.setItem('stonekeep-tutorial-complete','true');toast('Tutorial complete — begin building');
 }
 function startNewDungeon() {
-  state.rooms=[];state.selected=null;state.nextId=1;buildWorld();document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('A new keep awaits');
+  state.rooms=[];state.selected=null;state.nextId=1;state.showcase=false;buildWorld();document.body.classList.remove('menu-open');document.querySelector('#settings').classList.add('hidden');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');toast('A new keep awaits');
 }
 document.querySelector('#buildMode').onclick=()=>setMode('build');document.querySelector('#exploreMode').onclick=()=>setMode('explore');
 document.querySelector('#deleteBtn').onclick=deleteSelected;document.querySelector('#rotateBtn').onclick=rotateSelected;document.querySelector('#saveBtn').onclick=save;document.querySelector('#loadBtn').onclick=load;
 const help=document.querySelector('#help'),settings=document.querySelector('#settings');
 document.querySelector('#helpBtn').onclick=()=>help.classList.remove('hidden');document.querySelector('#closeHelp').onclick=()=>help.classList.add('hidden');document.querySelector('#startTutorialFromHelp').onclick=startTutorial;
 document.querySelector('#newGameBtn').onclick=startNewDungeon;document.querySelector('#tutorialBtn').onclick=startTutorial;
-const continueBtn=document.querySelector('#continueBtn');continueBtn.disabled=!localStorage.getItem('stonekeep-save');continueBtn.onclick=()=>{load();document.querySelector('#mainMenu').classList.add('hidden');setMode('build');};
+const continueBtn=document.querySelector('#continueBtn');continueBtn.disabled=!localStorage.getItem('stonekeep-save');continueBtn.onclick=()=>{load();document.body.classList.remove('menu-open');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');};
 function openSettings(){settings.classList.remove('hidden');applyPreferences();}
 document.querySelector('#settingsBtn').onclick=openSettings;document.querySelector('#menuSettingsBtn').onclick=openSettings;document.querySelector('#closeSettings').onclick=()=>settings.classList.add('hidden');document.querySelector('#applySettings').onclick=savePreferences;
 document.querySelector('#resetSettings').onclick=()=>{Object.assign(preferences,{quality:'high',volume:70,speed:100,reduceMotion:false});applyPreferences();};
@@ -256,4 +289,11 @@ function tick(){
   }
   renderer.render(scene,camera);requestAnimationFrame(tick);
 }
-readPreferences();buildWorld();tick();
+readPreferences();
+state.rooms=[
+  {id:1,x:-4,z:-3,w:4,d:4},
+  {id:2,x:0,z:-2,w:3,d:2},
+  {id:3,x:-3,z:1,w:3,d:3},
+  {id:4,x:3,z:-2,w:2,d:4}
+];state.nextId=5;cam.target.set(0,0,-1);cam.distance=27;cam.yaw=.82;cam.pitch=.66;updateBuildCamera();
+buildWorld();grid.visible=false;tick();
