@@ -6,7 +6,7 @@ const CELL = 2, WALL_H = 2.8, WALL_T = .24;
 const theme = THEMES.stoneKeep;
 const mats = makeThemeMaterials(theme);
 const state = { rooms: [], decorations: [], selected: null, tool: 'room', mode: 'build', dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true };
-const preferences = { quality: 'high', volume: 70, brightness: 125, speed: 100, reduceMotion: false };
+const preferences = { quality: 'high', volume: 70, brightness: 125, fog: 55, torch: 110, gridOpacity: 60, fov: 68, speed: 100, sensitivity: 100, showGrid: true, invertLook: false, autosave: true, reduceMotion: false };
 const keys = new Set();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -75,14 +75,14 @@ function makeTorch(group,x,z,side) {
   const [ox,,oz]=offsets[side]; const holder=addBox(group,[.08,.45,.08],[x+ox,1.38,z+oz],mats.trim);
   holder.rotation[side==='n'||side==='s'?'x':'z']=side==='n'||side==='w'?.35:-.35;
   const flame=new THREE.Mesh(new THREE.SphereGeometry(.09,8,6),mats.flame); flame.scale.y=1.7; flame.position.set(x+ox*1.8,1.69,z+oz*1.8); group.add(flame);
-  const light=new THREE.PointLight(0xff9a42,4.5,11,2); light.position.copy(flame.position); light.castShadow=false; group.add(light);
+  const light=new THREE.PointLight(0xff9a42,4.5,11,2);light.userData.baseIntensity=4.5;light.position.copy(flame.position);light.castShadow=false;group.add(light);
 }
 function addCylinder(group,r,depth,pos,material,segments=10){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,depth,segments),material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;
 }
 function addRoomProps(group,room) {
   const cx=(room.x+room.w/2)*CELL,cz=(room.z+room.d/2)*CELL,min=Math.min(room.w,room.d);
-  const roomFill=new THREE.PointLight(0xe59a58,2.05,Math.max(room.w,room.d)*CELL*1.5,2);roomFill.position.set(cx,2.25,cz);group.add(roomFill);
+  const roomFill=new THREE.PointLight(0xe59a58,2.05,Math.max(room.w,room.d)*CELL*1.5,2);roomFill.userData.baseIntensity=2.05;roomFill.position.set(cx,2.25,cz);group.add(roomFill);
   // Corner pillars give every chamber a stronger silhouette.
   if(room.w>1&&room.d>1) for(const [x,z] of [[room.x*CELL+.18,room.z*CELL+.18],[(room.x+room.w)*CELL-.18,room.z*CELL+.18],[room.x*CELL+.18,(room.z+room.d)*CELL-.18],[(room.x+room.w)*CELL-.18,(room.z+room.d)*CELL-.18]]){
     addCylinder(group,.22,WALL_H+.28,[x,(WALL_H+.28)/2,z],mats.wallTop,8);addBox(group,[.62,.12,.62],[x,.06,z],mats.wallTop);addBox(group,[.54,.13,.54],[x,WALL_H+.12,z],mats.wallTop);
@@ -117,7 +117,7 @@ function addPlacedDecoration(group,decor) {
     addCylinder(group,.31,.7,[0,.36,0],mats.wood,12);addCylinder(group,.325,.045,[0,.25,0],mats.brass,12);addCylinder(group,.325,.045,[0,.52,0],mats.brass,12);
   } else if(decor.type==='brazier'){
     addCylinder(group,.26,.5,[0,.28,0],mats.trim,10);const bowl=new THREE.Mesh(new THREE.CylinderGeometry(.38,.22,.18,10),mats.brass);bowl.position.y=.62;group.add(bowl);
-    const flame=new THREE.Mesh(new THREE.SphereGeometry(.13,8,6),mats.flame);flame.scale.y=1.65;flame.position.y=.83;group.add(flame);const light=new THREE.PointLight(0xff8a32,5.2,9,2);light.position.y=1.1;group.add(light);
+    const flame=new THREE.Mesh(new THREE.SphereGeometry(.13,8,6),mats.flame);flame.scale.y=1.65;flame.position.y=.83;group.add(flame);const light=new THREE.PointLight(0xff8a32,5.2,9,2);light.userData.baseIntensity=5.2;light.position.y=1.1;group.add(light);
   } else if(decor.type==='banner'){
     addCylinder(group,.06,2.2,[0,1.1,0],mats.brass,8);addBox(group,[1.05,.06,.06],[.42,2.05,0],mats.brass);const cloth=new THREE.Mesh(new THREE.PlaneGeometry(.72,1.2),mats.banner);cloth.position.set(.42,1.43,0);group.add(cloth);
   }
@@ -187,6 +187,19 @@ function applyPreferences() {
   document.querySelector('#motionSetting').checked=preferences.reduceMotion;
   document.querySelector('#brightnessSetting').value=preferences.brightness;
   renderer.toneMappingExposure=1.48*(preferences.brightness/100);
+  document.querySelector('#fogSetting').value=preferences.fog;
+  document.querySelector('#torchSetting').value=preferences.torch;
+  document.querySelector('#gridSetting').value=preferences.gridOpacity;
+  document.querySelector('#fovSetting').value=preferences.fov;
+  document.querySelector('#sensitivitySetting').value=preferences.sensitivity;
+  document.querySelector('#showGridSetting').checked=preferences.showGrid;
+  document.querySelector('#invertSetting').checked=preferences.invertLook;
+  document.querySelector('#autosaveSetting').checked=preferences.autosave;
+  scene.fog.near=15+(100-preferences.fog)*.18;scene.fog.far=44+(100-preferences.fog)*.82;
+  grid.material.opacity=preferences.gridOpacity/100;
+  grid.visible=state.mode==='build'&&preferences.showGrid&&!document.body.classList.contains('menu-open');
+  exploreCamera.fov=preferences.fov;exploreCamera.updateProjectionMatrix();
+  scene.traverse(o=>{if(o.isLight&&o.userData.baseIntensity)o.intensity=o.userData.baseIntensity*(preferences.torch/100);});
 }
 function readPreferences() {
   try { Object.assign(preferences,JSON.parse(localStorage.getItem('stonekeep-settings')||'{}')); } catch {}
@@ -196,7 +209,15 @@ function savePreferences() {
   preferences.quality=document.querySelector('#qualitySetting').value;
   preferences.volume=Number(document.querySelector('#volumeSetting').value);
   preferences.brightness=Number(document.querySelector('#brightnessSetting').value);
+  preferences.fog=Number(document.querySelector('#fogSetting').value);
+  preferences.torch=Number(document.querySelector('#torchSetting').value);
+  preferences.gridOpacity=Number(document.querySelector('#gridSetting').value);
+  preferences.fov=Number(document.querySelector('#fovSetting').value);
   preferences.speed=Number(document.querySelector('#speedSetting').value);
+  preferences.sensitivity=Number(document.querySelector('#sensitivitySetting').value);
+  preferences.showGrid=document.querySelector('#showGridSetting').checked;
+  preferences.invertLook=document.querySelector('#invertSetting').checked;
+  preferences.autosave=document.querySelector('#autosaveSetting').checked;
   preferences.reduceMotion=document.querySelector('#motionSetting').checked;
   localStorage.setItem('stonekeep-settings',JSON.stringify(preferences));applyPreferences();
   document.querySelector('#settings').classList.add('hidden');toast('Settings applied');
@@ -222,7 +243,7 @@ renderer.domElement.addEventListener('pointerdown',e=>{
       const c=pointerCell(e),roomId=c?occupiedMap().get(cellKey(c.x,c.z)):null;
       if(roomId!=null){
         state.decorations.push({id:state.nextDecorId++,type:state.tool,x:c.x,z:c.z,roomId,rotation:(state.nextDecorId%4)*Math.PI/2});
-        buildWorld();toast(`${state.tool[0].toUpperCase()+state.tool.slice(1)} placed`);
+        buildWorld();if(preferences.autosave)save(true);toast(`${state.tool[0].toUpperCase()+state.tool.slice(1)} placed`);
       } else toast('Decorations must be placed inside a room');
       return;
     }
@@ -237,8 +258,8 @@ renderer.domElement.addEventListener('pointerdown',e=>{
   }
 });
 renderer.domElement.addEventListener('pointermove',e=>{
-  if(state.mode==='explore'&&document.pointerLockElement===renderer.domElement){exploreYaw-=e.movementX*.0022;explorePitch=Math.max(-1.35,Math.min(1.35,explorePitch-e.movementY*.0022));return}
-  if(rightDrag){cam.yaw-=(e.clientX-lastPointer.x)*.008;cam.pitch=Math.max(.28,Math.min(1.35,cam.pitch+(e.clientY-lastPointer.y)*.006));lastPointer={x:e.clientX,y:e.clientY};updateBuildCamera();return}
+  if(state.mode==='explore'&&document.pointerLockElement===renderer.domElement){const sensitivity=preferences.sensitivity/100;exploreYaw-=e.movementX*.0022*sensitivity;explorePitch=Math.max(-1.35,Math.min(1.35,explorePitch+(preferences.invertLook?1:-1)*e.movementY*.0022*sensitivity));return}
+  if(rightDrag){const sensitivity=preferences.sensitivity/100;cam.yaw-=(e.clientX-lastPointer.x)*.008*sensitivity;cam.pitch=Math.max(.28,Math.min(1.35,cam.pitch+(e.clientY-lastPointer.y)*.006*sensitivity));lastPointer={x:e.clientX,y:e.clientY};updateBuildCamera();return}
   if(state.dragStart){const c=pointerCell(e);if(c){state.dragEnd=c;updatePreview();}}
 });
 renderer.domElement.addEventListener('pointerup',e=>{
@@ -246,7 +267,7 @@ renderer.domElement.addEventListener('pointerup',e=>{
   if(e.button===2){rightDrag=false;return}
   if(e.button===0&&state.mode==='build'&&state.dragStart){
     const r=normalizeRect(state.dragStart,state.dragEnd);
-    if(state.previewValid){r.id=state.nextId++;state.rooms.push(r);state.selected=r.id;buildWorld();toast('Chamber raised');}
+    if(state.previewValid){r.id=state.nextId++;state.rooms.push(r);state.selected=r.id;buildWorld();if(preferences.autosave)save(true);toast('Chamber raised');}
     else {state.selected=pickRoom(e);updateSelection();if(!state.selected)toast('Blocked — choose empty ground');}
     state.dragStart=state.dragEnd=null;previewGroup.clear();
   }
@@ -254,13 +275,13 @@ renderer.domElement.addEventListener('pointerup',e=>{
 renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
 renderer.domElement.addEventListener('wheel',e=>{if(state.mode==='build'){cam.distance=Math.max(10,Math.min(60,cam.distance+e.deltaY*.025));updateBuildCamera();}},{passive:true});
 
-function deleteSelected(){if(!state.selected)return;state.rooms=state.rooms.filter(r=>r.id!==state.selected);state.decorations=state.decorations.filter(d=>d.roomId!==state.selected);state.selected=null;buildWorld();toast('Room demolished');}
-function rotateSelected(){const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;const nr={...r,w:r.d,d:r.w};nr.x=Math.round(r.x+(r.w-nr.w)/2);nr.z=Math.round(r.z+(r.d-nr.d)/2);if(isValidRect(nr,r.id)){Object.assign(r,nr);buildWorld();toast('Room rotated');}else toast('Rotation blocked');}
-function save(){localStorage.setItem('stonekeep-save',JSON.stringify({version:2,theme:theme.id,rooms:state.rooms,decorations:state.decorations,nextId:state.nextId,nextDecorId:state.nextDecorId}));toast('Dungeon saved locally');}
+function deleteSelected(){if(!state.selected)return;state.rooms=state.rooms.filter(r=>r.id!==state.selected);state.decorations=state.decorations.filter(d=>d.roomId!==state.selected);state.selected=null;buildWorld();if(preferences.autosave)save(true);toast('Room demolished');}
+function rotateSelected(){const r=state.rooms.find(x=>x.id===state.selected);if(!r)return;const nr={...r,w:r.d,d:r.w};nr.x=Math.round(r.x+(r.w-nr.w)/2);nr.z=Math.round(r.z+(r.d-nr.d)/2);if(isValidRect(nr,r.id)){Object.assign(r,nr);buildWorld();if(preferences.autosave)save(true);toast('Room rotated');}else toast('Rotation blocked');}
+function save(silent=false){localStorage.setItem('stonekeep-save',JSON.stringify({version:2,theme:theme.id,rooms:state.rooms,decorations:state.decorations,nextId:state.nextId,nextDecorId:state.nextDecorId}));if(!silent)toast('Dungeon saved locally');}
 function load(){const raw=localStorage.getItem('stonekeep-save');if(!raw){toast('No saved dungeon found');return}try{const data=JSON.parse(raw);state.rooms=data.rooms||[];state.decorations=data.decorations||[];state.nextId=data.nextId||1;state.nextDecorId=data.nextDecorId||1;state.selected=null;state.showcase=false;selectTool('room');buildWorld();toast('Dungeon restored');}catch{toast('Save data could not be read');}}
 
 function setMode(mode){
-  state.mode=mode;camera=mode==='build'?buildCamera:exploreCamera;grid.visible=mode==='build';selectionGroup.visible=mode==='build';previewGroup.clear();
+  state.mode=mode;camera=mode==='build'?buildCamera:exploreCamera;grid.visible=mode==='build'&&preferences.showGrid;selectionGroup.visible=mode==='build';previewGroup.clear();
   document.querySelector('#buildMode').classList.toggle('active',mode==='build');document.querySelector('#exploreMode').classList.toggle('active',mode==='explore');
   document.querySelector('.palette').style.display=mode==='build'?'block':'none';document.querySelector('.inspector').style.display=mode==='build'?'block':'none';document.querySelector('#crosshair').style.display=mode==='explore'?'block':'none';
   document.querySelector('#hint').textContent=mode==='build'?'LMB DRAG Place room · RMB DRAG Rotate view · WASD/ARROWS Pan · WHEEL Zoom':'CLICK Capture mouse · WASD Move · MOUSE Look · ESC Release · B Return to build';
@@ -313,7 +334,7 @@ document.querySelector('#roomTool').onclick=()=>selectTool('room');document.quer
 const continueBtn=document.querySelector('#continueBtn');continueBtn.disabled=!localStorage.getItem('stonekeep-save');continueBtn.onclick=()=>{load();document.body.classList.remove('menu-open');document.querySelector('#mainMenu').classList.add('hidden');setMode('build');};
 function openSettings(){settings.classList.remove('hidden');applyPreferences();}
 document.querySelector('#settingsBtn').onclick=openSettings;document.querySelector('#menuSettingsBtn').onclick=openSettings;document.querySelector('#closeSettings').onclick=()=>settings.classList.add('hidden');document.querySelector('#applySettings').onclick=savePreferences;
-document.querySelector('#resetSettings').onclick=()=>{Object.assign(preferences,{quality:'high',volume:70,brightness:125,speed:100,reduceMotion:false});applyPreferences();};
+document.querySelector('#resetSettings').onclick=()=>{Object.assign(preferences,{quality:'high',volume:70,brightness:125,fog:55,torch:110,gridOpacity:60,fov:68,speed:100,sensitivity:100,showGrid:true,invertLook:false,autosave:true,reduceMotion:false});applyPreferences();};
 document.querySelector('#tutorialExit').onclick=endTutorial;document.querySelector('#tutorialBack').onclick=()=>showTutorialStep(tutorialIndex-1);document.querySelector('#tutorialNext').onclick=()=>tutorialIndex===tutorialSteps.length-1?endTutorial():showTutorialStep(tutorialIndex+1);
 addEventListener('keydown',e=>{keys.add(e.code);if(e.code==='Delete')deleteSelected();if(e.code==='KeyR'&&state.mode==='build')rotateSelected();if(e.code==='KeyB')setMode('build');if((e.ctrlKey||e.metaKey)&&e.code==='KeyS'){e.preventDefault();save();}});
 addEventListener('keyup',e=>keys.delete(e.code));
