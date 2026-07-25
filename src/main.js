@@ -194,7 +194,17 @@ renderer.domElement.addEventListener('pointerdown',e=>{
   if(state.mode!=='build') { if(document.pointerLockElement!==renderer.domElement)renderer.domElement.requestPointerLock(); return; }
   lastPointer={x:e.clientX,y:e.clientY};
   if(e.button===2){rightDrag=true;return}
-  if(e.button===0){const c=pointerCell(e);if(c){state.dragStart=c;state.dragEnd=c;updatePreview();}}
+  if(e.button===0){
+    renderer.domElement.setPointerCapture?.(e.pointerId);
+    // Existing dungeon geometry takes priority over the construction grid.
+    // This keeps a normal click from accidentally starting an invalid room
+    // preview on top of the room the player meant to select.
+    const roomId=pickRoom(e);
+    if(roomId!=null){
+      state.selected=roomId;state.dragStart=state.dragEnd=null;previewGroup.clear();updateSelection();return;
+    }
+    const c=pointerCell(e);if(c){state.dragStart=c;state.dragEnd=c;updatePreview();}
+  }
 });
 renderer.domElement.addEventListener('pointermove',e=>{
   if(state.mode==='explore'&&document.pointerLockElement===renderer.domElement){exploreYaw-=e.movementX*.0022;explorePitch=Math.max(-1.35,Math.min(1.35,explorePitch-e.movementY*.0022));return}
@@ -202,6 +212,7 @@ renderer.domElement.addEventListener('pointermove',e=>{
   if(state.dragStart){const c=pointerCell(e);if(c){state.dragEnd=c;updatePreview();}}
 });
 renderer.domElement.addEventListener('pointerup',e=>{
+  if(renderer.domElement.hasPointerCapture?.(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
   if(e.button===2){rightDrag=false;return}
   if(e.button===0&&state.mode==='build'&&state.dragStart){
     const r=normalizeRect(state.dragStart,state.dragEnd);
