@@ -560,13 +560,15 @@ function buildHeroRoom(){
 }
 
 const tutorialSteps = [
-  { target:'.topbar', kicker:'WELCOME, ARCHITECT', title:'Your keep begins here.', body:'This guided tour follows the real interface. Build and Explore are your two main modes; you can revisit this tutorial anytime with the ? button.' },
-  { target:'.inspector', kicker:'STEP ONE · GROWTH', title:'Follow one clear goal.', body:'Your settlement begins as a small camp. Complete the goal in the Growth panel to unlock the next useful buildings. The underground opens later.' },
-  { target:null, kicker:'STEP TWO · PLACE A ROOM', title:'Drag across the grid.', body:'Hold the left mouse button and drag over empty tiles. A green preview is valid; red means the footprint overlaps another room or is too large.' },
-  { target:'.palette', kicker:'STEP THREE · EDIT', title:'Select, rotate, demolish.', body:'Click a finished room to select it. Use Rotate or press R to turn its footprint. Use Demolish or Delete to remove it.' },
-  { target:'.mode-switch', kicker:'STEP FOUR · EXPLORE', title:'Walk what you build.', body:'Choose Explore after placing a room. Click the 3D view, look with the mouse, and move with WASD. Press B to return to Build mode.' },
-  { target:'.actions', kicker:'STEP FIVE · KEEP YOUR WORK', title:'Save and restore.', body:'Save stores the current layout in this browser. Load rebuilds every floor, wall, doorway, torch, and prop from compact room data.' },
-  { target:'.inspector', kicker:'TOUR COMPLETE', title:'Grow from camp to castle.', body:'Start with a cottage and farm. New workshops, defenses, decorations, and underground construction appear only when your settlement is ready for them.' }
+  { target:'.inspector', kicker:'WELCOME · FOUNDING CAMP', title:'Begin with one achievable goal.', body:'You are founding a settlement, not managing a finished dungeon. The Growth panel always shows what to build next and what completing it will unlock.' },
+  { target:'#surfaceBlueprints', kicker:'STEP ONE · FIRST HOMES', title:'Build a cottage and farm.', body:'Only the essentials are available at first. Choose Cottage or Farm, then drag a small footprint across empty ground. Roads can connect the settlement as it grows.' },
+  { target:null, kicker:'STEP TWO · PLACE A BUILDING', title:'Drag on the surface grid.', body:'Hold the left mouse button and drag over a few tiles. Green means the footprint can be built and afforded; red means it overlaps something or costs too much.' },
+  { target:'.resource-bar', kicker:'STEP THREE · PROVIDE', title:'Watch gold, food, and workers.', body:'Every building costs gold. Farms replenish food, while later workshops and storehouses strengthen the settlement economy. Start compactly so resources last.' },
+  { target:'.inspector', kicker:'STEP FOUR · GROW', title:'Complete milestones to unlock more.', body:'A cottage and farm advance the camp into a hamlet. Each new stage reveals only the buildings and management tools that now matter.' },
+  { target:'.layer-switch', kicker:'STEP FIVE · DELVE LATER', title:'The underground is earned.', body:'Underground construction stays locked while your settlement is fragile. Establish production and grow into a village; then the first dungeon chamber can be excavated.' },
+  { target:'.mode-switch', kicker:'STEP SIX · WALK THE SETTLEMENT', title:'Explore what you have built.', body:'Choose Explore to walk through buildings and roads. Click the world to look around, move with WASD, and press B to return to Build mode.' },
+  { target:'.actions', kicker:'STEP SEVEN · KEEP YOUR PROGRESS', title:'Save the whole stronghold.', body:'Save preserves the surface, underground, resources, furnishings, and growth stage in this browser. Continue returns to that same settlement.' },
+  { target:'.inspector', kicker:'YOUR FIRST TASK', title:'Build one cottage and one farm.', body:'Keep both buildings small. When they are complete, Stonekeep will announce your new settlement stage and reveal the next pair of useful buildings.' }
 ];
 let tutorialIndex=0;
 function showTutorialStep(index) {
@@ -580,7 +582,7 @@ function showTutorialStep(index) {
   document.querySelector('#tutorialNext').textContent=tutorialIndex===tutorialSteps.length-1?'START BUILDING':'NEXT';
 }
 function startTutorial() {
-  if(state.showcase){state.rooms=[];state.decorations=[];state.nextId=1;state.nextDecorId=1;state.showcase=false;buildWorld();}
+  if(state.showcase)startNewDungeon();
   document.body.classList.remove('menu-open');
   document.querySelector('#mainMenu').classList.add('hidden');document.querySelector('#help').classList.add('hidden');document.querySelector('#settings').classList.add('hidden');document.querySelector('#tutorial').classList.remove('hidden');setMode('build');showTutorialStep(0);
 }
