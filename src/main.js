@@ -9,7 +9,7 @@ const roadMaterial=new THREE.MeshStandardMaterial({color:0x5a4b36,roughness:1,me
 const roadEdgeMaterial=new THREE.MeshStandardMaterial({color:0x71634d,roughness:.95});
 const soilMaterial=new THREE.MeshStandardMaterial({color:0x3f2b1d,roughness:1}),furrowMaterial=new THREE.MeshStandardMaterial({color:0x65432b,roughness:1}),cropMaterial=new THREE.MeshStandardMaterial({color:0x78914b,roughness:1}),canvasMaterial=new THREE.MeshStandardMaterial({color:0xa76a45,roughness:1,side:THREE.DoubleSide});
 const meadowMaterial=new THREE.MeshStandardMaterial({color:0x43583c,roughness:1}),dryGrassMaterial=new THREE.MeshStandardMaterial({color:0x706b43,roughness:1}),waterMaterial=new THREE.MeshStandardMaterial({color:0x315a5d,roughness:.24,metalness:.12,transparent:true,opacity:.82}),flowerMaterial=new THREE.MeshStandardMaterial({color:0xb99a65,roughness:.9});
-const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'cottage', layer:'surface', mode: 'build', progressionTier:1, choosingExploreStart:false, exploreStart:null, cutawayRoom:null, dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:180, food:60, timeScale:1, simTime:0, simAccumulator:0 };
+const state = { rooms: [], decorations: [], selected: null, selectedDecor: null, tool: 'room', buildRole:'cottage', layer:'surface', mode: 'build', progressionTier:1, choosingExploreStart:false, exploreStart:null, cutawayRoom:null, weatherRain:0, dragStart: null, dragEnd: null, previewValid: false, nextId: 1, nextDecorId: 1, showcase: true, keeperPath:[], keeperPathIndex:0, gold:180, food:60, timeScale:1, simTime:0, simAccumulator:0 };
 const ROOM_TYPES={
   unassigned:{name:'Unassigned Chamber',cost:5,purpose:'A flexible chamber with no production. Assign its purpose later.',needs:'No furnishing requirement'},
   treasury:{name:'Treasury',cost:6,purpose:'Stores more gold and generates income while operational.',needs:'Requires a chest or gold pile'},
@@ -99,7 +99,8 @@ function makeWorker(index){
   addCylinder(leftLeg,.065,.4,[0,-.2,0],cloth,7);addCylinder(rightLeg,.065,.4,[0,-.2,0],cloth,7);addBox(leftLeg,[.13,.1,.22],[0,-.42,-.04],boot);addBox(rightLeg,[.13,.1,.22],[0,-.42,-.04],boot);
   if(index===0){const hat=addCylinder(g,.23,.045,[0,1.25,0],hair,12);addCylinder(g,.14,.16,[0,1.34,0],hair,10);}
   else{addBox(g,[.34,.42,.05],[0,.69,-.15],new THREE.MeshStandardMaterial({color:0xd1bd8e,roughness:1}),false);const pouch=addBox(g,[.17,.18,.1],[.22,.5,.12],mats.leather);}
-  g.scale.setScalar(1.18);g.userData={hunger:100,rest:100,morale:100,path:[],task:'Idle',index,leftArm,rightArm,leftLeg,rightLeg,walkPhase:index*Math.PI};g.visible=false;scene.add(g);workers.push(g);return g;
+  const identity=index===0?{name:'Mara',profession:'Farmer',trait:'Sociable',habit:'Visits the well at dusk'}:{name:'Tomas',profession:'Builder',trait:'Industrious',habit:'Starts work before sunrise'};
+  g.scale.setScalar(1.18);g.userData={...identity,hunger:100,rest:100,morale:100,path:[],task:'Idle',index,leftArm,rightArm,leftLeg,rightLeg,walkPhase:index*Math.PI};g.visible=false;scene.add(g);workers.push(g);return g;
 }
 makeWorker(0);makeWorker(1);
 
@@ -404,6 +405,7 @@ function updateSimHUD(){
   document.querySelector('#goldValue').textContent=Math.floor(state.gold);document.querySelector('#foodValue').textContent=Math.floor(state.food);document.querySelector('#workerValue').textContent=state.rooms.some(r=>r.layer==='surface'&&r.role==='hall')?workers.length:0;
   const alert=state.food<20?'Food stores are critically low.':state.gold<40?'The treasury cannot fund construction.':state.rooms.some(r=>r.role&&r.role!=='unassigned'&&!roomOperational(r))?'A functional room needs furnishings or repairs.':state.rooms.length<3?'Expand the keep and assign its first rooms.':'The keep is stable and operating.';
   document.querySelector('#alerts strong').textContent=alert;
+  workers.forEach((w,i)=>{const u=w.userData,card=document.querySelector(`#villager${i}`);if(!card)return;card.querySelector('b').textContent=u.name;card.querySelector('span').textContent=`${u.profession} · ${u.trait} · ${Math.round(u.morale)}% morale`;card.querySelector('small').textContent=state.rooms.some(r=>r.role==='hall')?`${u.task} · ${u.habit}`:'Arrives after the Great Hall is built';});
 }
 function toast(msg){const e=document.querySelector('#toast');e.textContent=msg;e.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove('show'),1800);}
 
@@ -575,13 +577,17 @@ function assignWorkerTask(worker){
   const u=worker.userData,operational=state.rooms.filter(roomOperational);let target=null,task='Patrolling';
   if(u.hunger<65){target=operational.find(r=>r.role==='kitchen');task='Fetching a meal';}
   if(!target&&u.rest<55){target=operational.find(r=>r.role==='barracks');task='Going to rest';}
-  if(!target){const workRooms=operational.filter(r=>['treasury','kitchen','workshop','guard','hall','forge','farm','storehouse','lumberyard','watchtower','well','market','orchard'].includes(r.role)&&(r.layer||'underground')===state.layer);target=workRooms[(Math.floor(state.simTime/5)+u.index)%Math.max(1,workRooms.length)];task=target?`Working in ${target.role}`:'Waiting for an operational room';}
+  const hour=(state.simTime/3)%24,onLayer=r=>(r.layer||'underground')===state.layer;
+  if(!target&&state.weatherRain>.45){target=operational.find(r=>onLayer(r)&&['cottage','hall','market'].includes(r.role));task='Sheltering from the rain';}
+  if(!target&&hour>=18&&hour<21){target=operational.find(r=>onLayer(r)&&(u.trait==='Sociable'?['well','market','hall'].includes(r.role):['cottage','hall'].includes(r.role)));task=u.trait==='Sociable'?'Socializing after work':'Taking a quiet evening';}
+  if(!target&&(hour>=21||hour<6)){target=operational.find(r=>onLayer(r)&&['cottage','hall'].includes(r.role));task='Sleeping';}
+  if(!target){const preferred=u.profession==='Farmer'?['farm','orchard','well']:['lumberyard','storehouse','forge','market'],workRooms=operational.filter(r=>onLayer(r)&&preferred.includes(r.role));target=workRooms[(Math.floor(state.simTime/5)+u.index)%Math.max(1,workRooms.length)];task=target?`${u.profession} work · ${ROOM_TYPES[target.role]?.name||target.role}`:'Looking for suitable work';}
   if(!target)return;const start={x:Math.floor(worker.position.x/CELL),z:Math.floor(worker.position.z/CELL)},goal=roomCenterCell(target),path=findPath(start,goal);if(path.length){u.path=path.slice(1);u.targetRoom=target.id;u.task=task;}
 }
 function terrainSpeedAt(x,z){const roomId=occupiedMap().get(cellKey(x,z)),role=state.rooms.find(r=>r.id===roomId)?.role;return role==='cobble'?1.55:role==='boardwalk'?1.35:role==='road'?1.2:1;}
 function updateWorker(worker,dt){
-  const u=worker.userData;u.hunger=Math.max(0,u.hunger-dt*.42*difficulty().hunger);u.rest=Math.max(0,u.rest-dt*.18);u.morale=Math.max(15,Math.min(100,u.morale+dt*(u.hunger>35?.05:-.18)));
-  if(!u.path.length){u.leftArm.rotation.x*=.82;u.rightArm.rotation.x*=.82;u.leftLeg.rotation.x*=.82;u.rightLeg.rotation.x*=.82;const room=state.rooms.find(r=>r.id===u.targetRoom);if(room?.role==='kitchen'&&state.food>=1&&u.hunger<85){state.food-=1;u.hunger=Math.min(100,u.hunger+28);}if(room?.role==='barracks')u.rest=Math.min(100,u.rest+dt*8);if(Math.floor(state.simTime+u.index)%4===0)assignWorkerTask(worker);return;}
+  const u=worker.userData;u.hunger=Math.max(0,u.hunger-dt*.42*difficulty().hunger);u.rest=Math.max(0,u.rest-dt*(u.trait==='Industrious'?.14:.18));u.morale=Math.max(15,Math.min(100,u.morale+dt*(u.hunger>35?.05:-.18)));
+  if(!u.path.length){u.leftArm.rotation.x*=.82;u.rightArm.rotation.x*=.82;u.leftLeg.rotation.x*=.82;u.rightLeg.rotation.x*=.82;const room=state.rooms.find(r=>r.id===u.targetRoom);if(room?.role==='kitchen'&&state.food>=1&&u.hunger<85){state.food-=1;u.hunger=Math.min(100,u.hunger+28);}if(room?.role==='barracks'||u.task==='Sleeping')u.rest=Math.min(100,u.rest+dt*8);if(u.task?.includes('Socializing'))u.morale=Math.min(100,u.morale+dt*2.2);if(Math.floor(state.simTime+u.index)%4===0)assignWorkerTask(worker);return;}
   const cell=u.path[0],target=new THREE.Vector3((cell.x+.5)*CELL,.08,(cell.z+.5)*CELL),delta=target.clone().sub(worker.position);if(delta.length()<.07)u.path.shift();else{worker.rotation.y=Math.atan2(delta.x,delta.z);worker.position.addScaledVector(delta.normalize(),Math.min(1.75*terrainSpeedAt(cell.x,cell.z)*dt,delta.length()));worker.position.y=.08+Math.abs(Math.sin(state.simTime*7+u.index))*.035;}
   const swing=Math.sin(state.simTime*8+u.walkPhase)*.55;u.leftArm.rotation.x=swing;u.rightArm.rotation.x=-swing;u.leftLeg.rotation.x=-swing*.65;u.rightLeg.rotation.x=swing*.65;
 }
@@ -715,7 +721,7 @@ function tick(){
     for(const cloud of clouds){cloud.position.x+=cloud.userData.speed*dt;if(cloud.position.x>48)cloud.position.x=-48;}
     for(const b of butterflies){const u=b.userData,t=elapsed*1.4+u.phase;b.position.x=u.origin.x+Math.sin(t)*.8;b.position.z=u.origin.z+Math.cos(t*.73)*.65;b.position.y=u.origin.y+Math.sin(t*2.1)*.16;const flap=Math.sin(t*9)*.85;u.left.rotation.z=flap;u.right.rotation.z=-flap;}
     for(const o of terrainGroup.children)if(o.userData.wind!=null)o.rotation.z=Math.sin(elapsed*.75+o.userData.wind)*.025;
-    const weatherWave=Math.max(0,Math.sin(elapsed*.055-1.2)),rainStrength=Math.max(0,(weatherWave-.72)/.28);rain.material.opacity=rainStrength*.58;sun.intensity=theme.atmosphere.sunIntensity*1.35*(1-rainStrength*.35);
+    const weatherWave=Math.max(0,Math.sin(elapsed*.055-1.2)),rainStrength=Math.max(0,(weatherWave-.72)/.28);state.weatherRain=rainStrength;rain.material.opacity=rainStrength*.58;sun.intensity=theme.atmosphere.sunIntensity*1.35*(1-rainStrength*.35);
     const ra=rain.geometry.attributes.position;for(let i=1;i<ra.array.length;i+=3){ra.array[i]-=(8+rainStrength*12)*dt;if(ra.array[i]<0)ra.array[i]=16;}ra.needsUpdate=true;
   }
   for(const p of [...effectsGroup.children]){p.userData.life-=dt;p.position.addScaledVector(p.userData.velocity,dt);p.userData.velocity.y-=3.2*dt;p.rotation.x+=dt*5;p.rotation.z+=dt*3;p.material.transparent=true;p.material.opacity=Math.max(0,p.userData.life);if(p.userData.life<=0)effectsGroup.remove(p);}
