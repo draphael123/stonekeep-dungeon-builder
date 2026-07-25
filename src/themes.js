@@ -60,7 +60,7 @@ export function makeThemeMaterials(theme) {
   result.floor.map=stoneTexture('floor');result.floor.needsUpdate=true;
   result.floorAlt.map=result.floor.map;result.floorAlt.needsUpdate=true;
   result.wall.map=stoneTexture('wall');result.wall.needsUpdate=true;
-  new THREE.TextureLoader().load('/textures/stonekeep-masonry.png',texture=>{
+  new THREE.TextureLoader().load('/stonekeep-masonry.png',texture=>{
     texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(2.2,1.25);texture.anisotropy=8;
     result.wall.map=texture;result.wall.needsUpdate=true;
   });
