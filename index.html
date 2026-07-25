@@ -14,6 +14,14 @@
         <button id="buildMode" class="active">BUILD</button>
         <button id="exploreMode">EXPLORE</button>
       </div>
+      <div class="resource-bar" aria-label="Dungeon resources">
+        <span class="gold-resource">◆ <b id="goldValue">500</b><small>GOLD</small></span>
+        <span class="food-resource">● <b id="foodValue">100</b><small>FOOD</small></span>
+        <span>♟ <b id="workerValue">2</b><small>WORKERS</small></span>
+      </div>
+      <div class="time-controls" aria-label="Simulation speed">
+        <button id="pauseTime" title="Pause">Ⅱ</button><button id="normalTime" class="active" title="Normal speed">▶</button><button id="fastTime" title="Fast speed">▶▶</button>
+      </div>
       <div class="actions">
         <button id="saveBtn" title="Save (Ctrl+S)">SAVE</button>
         <button id="loadBtn">LOAD</button>
@@ -58,6 +66,7 @@
       <div class="divider"></div>
       <p class="eyebrow">ROOM DRESSING</p>
       <select id="roleSelect" class="keep-select" aria-label="Selected room function">
+        <option value="heart" disabled>Dungeon Heart</option>
         <option value="unassigned">Unassigned chamber</option>
         <option value="treasury">Treasury</option>
         <option value="barracks">Barracks</option>
@@ -90,7 +99,9 @@
       <div><span>Rooms</span><strong id="roomCount">0</strong></div>
       <div><span>Floor area</span><strong id="tileCount">0 tiles</strong></div>
       <div><span>Decorations</span><strong id="decorCount">0</strong></div>
+      <div><span>Operational</span><strong id="operationalCount">0</strong></div>
       <div><span>Theme</span><strong>Stone Keep</strong></div>
+      <div id="alerts" class="alerts"><span>KEEP STATUS</span><strong>The dungeon stirs.</strong></div>
       <p id="selectionInfo">Drag across the grid to raise your first chamber.</p>
     </section>
     <div id="toast" class="toast"></div>
