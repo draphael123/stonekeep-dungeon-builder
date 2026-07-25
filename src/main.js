@@ -76,8 +76,19 @@ const animatedFlames=[],floatingMotes=[];
 const keeper=new THREE.Group();const keeperBody=addCylinder(keeper,.22,.82,[0,.52,0],mats.leather,10);const keeperHead=new THREE.Mesh(new THREE.SphereGeometry(.18,10,8),mats.brass);keeperHead.position.y=1.02;keeper.add(keeperHead);const keeperLight=new THREE.PointLight(0xffa34d,1.8,5,2);keeperLight.position.y=1.25;keeper.add(keeperLight);keeper.visible=false;scene.add(keeper);
 const workers=[];
 function makeWorker(index){
-  const g=new THREE.Group(),body=addCylinder(g,.18,.65,[0,.43,0],index?mats.wood:mats.leather,9),head=new THREE.Mesh(new THREE.SphereGeometry(.14,9,7),mats.wallTop);head.position.y=.87;g.add(head);
-  const pack=addBox(g,[.3,.33,.16],[0,.55,.18],mats.wood);g.userData={hunger:100,rest:100,morale:100,path:[],task:'Idle',index};g.visible=false;scene.add(g);workers.push(g);return g;
+  const g=new THREE.Group(),skin=new THREE.MeshStandardMaterial({color:index?0xc58b67:0xd6a27d,roughness:.9}),hair=new THREE.MeshStandardMaterial({color:index?0x4a2d20:0x80603c,roughness:1}),cloth=new THREE.MeshStandardMaterial({color:index?0x526742:0x7b493b,roughness:1}),shirt=new THREE.MeshStandardMaterial({color:index?0xb59b6c:0x5d7180,roughness:1}),boot=new THREE.MeshStandardMaterial({color:0x30251f,roughness:1});
+  const torso=addBox(g,[.4,.5,.24],[0,.68,0],cloth),shirtFront=addBox(g,[.32,.24,.255],[0,.78,-.005],shirt,false);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.18,12,9),skin);head.position.y=1.08;head.castShadow=true;g.add(head);
+  const hairCap=new THREE.Mesh(new THREE.SphereGeometry(.185,12,7,0,Math.PI*2,0,Math.PI*.48),hair);hairCap.position.y=1.12;g.add(hairCap);
+  const nose=new THREE.Mesh(new THREE.SphereGeometry(.035,7,5),skin);nose.position.set(0,1.08,-.17);g.add(nose);
+  for(const x of [-.07,.07]){const eye=new THREE.Mesh(new THREE.SphereGeometry(.014,6,4),mats.soot);eye.position.set(x,1.12,-.166);g.add(eye);}
+  const leftArm=new THREE.Group(),rightArm=new THREE.Group();leftArm.position.set(-.25,.86,0);rightArm.position.set(.25,.86,0);g.add(leftArm,rightArm);
+  addCylinder(leftArm,.055,.46,[0,-.2,0],shirt,7);addCylinder(rightArm,.055,.46,[0,-.2,0],shirt,7);addCylinder(leftArm,.06,.12,[0,-.46,0],skin,7);addCylinder(rightArm,.06,.12,[0,-.46,0],skin,7);
+  const leftLeg=new THREE.Group(),rightLeg=new THREE.Group();leftLeg.position.set(-.1,.46,0);rightLeg.position.set(.1,.46,0);g.add(leftLeg,rightLeg);
+  addCylinder(leftLeg,.065,.4,[0,-.2,0],cloth,7);addCylinder(rightLeg,.065,.4,[0,-.2,0],cloth,7);addBox(leftLeg,[.13,.1,.22],[0,-.42,-.04],boot);addBox(rightLeg,[.13,.1,.22],[0,-.42,-.04],boot);
+  if(index===0){const hat=addCylinder(g,.23,.045,[0,1.25,0],hair,12);addCylinder(g,.14,.16,[0,1.34,0],hair,10);}
+  else{addBox(g,[.34,.42,.05],[0,.69,-.15],new THREE.MeshStandardMaterial({color:0xd1bd8e,roughness:1}),false);const pouch=addBox(g,[.17,.18,.1],[.22,.5,.12],mats.leather);}
+  g.scale.setScalar(1.18);g.userData={hunger:100,rest:100,morale:100,path:[],task:'Idle',index,leftArm,rightArm,leftLeg,rightLeg,walkPhase:index*Math.PI};g.visible=false;scene.add(g);workers.push(g);return g;
 }
 makeWorker(0);makeWorker(1);
 
@@ -350,7 +361,7 @@ function updateSelection() {
 }
 function updateHUD(){const activeRooms=state.rooms.filter(r=>(r.layer||'underground')===state.layer);document.querySelector('#roomCount').textContent=activeRooms.length;const n=activeRooms.reduce((s,r)=>s+r.w*r.d,0);document.querySelector('#tileCount').textContent=`${n} tile${n===1?'':'s'}`;document.querySelector('#decorCount').textContent=state.decorations.filter(d=>activeRooms.some(r=>r.id===d.roomId)).length;document.querySelector('#operationalCount').textContent=activeRooms.filter(roomOperational).length;updateSimHUD();}
 function updateSimHUD(){
-  document.querySelector('#goldValue').textContent=Math.floor(state.gold);document.querySelector('#foodValue').textContent=Math.floor(state.food);document.querySelector('#workerValue').textContent=workers.length;
+  document.querySelector('#goldValue').textContent=Math.floor(state.gold);document.querySelector('#foodValue').textContent=Math.floor(state.food);document.querySelector('#workerValue').textContent=state.rooms.some(r=>r.layer==='surface'&&r.role==='hall')?workers.length:0;
   const alert=state.food<20?'Food stores are critically low.':state.gold<40?'The treasury cannot fund construction.':state.rooms.some(r=>r.role&&r.role!=='unassigned'&&!roomOperational(r))?'A functional room needs furnishings or repairs.':state.rooms.length<3?'Expand the keep and assign its first rooms.':'The keep is stable and operating.';
   document.querySelector('#alerts strong').textContent=alert;
 }
@@ -455,7 +466,7 @@ renderer.domElement.addEventListener('pointerup',e=>{
   if(e.button===2){rightDrag=false;return}
   if(e.button===0&&state.mode==='build'&&state.dragStart){
     const r=normalizeRect(state.dragStart,state.dragEnd);
-    if(state.previewValid){const type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost;if(state.gold<cost){toast(`Need ${cost} gold to build this ${type.name.toLowerCase()}`);}else{state.gold-=cost;r.id=state.nextId++;r.condition='occupied';r.role=state.buildRole;r.layer=state.layer;r.doorsOpen=true;state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();constructionBurst(r);if(preferences.autosave)save(true);toast(`${type.name} raised · ${cost} gold`);}}
+    if(state.previewValid){const type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost;if(state.gold<cost){toast(`Need ${cost} gold to build this ${type.name.toLowerCase()}`);}else{state.gold-=cost;r.id=state.nextId++;r.condition='occupied';r.role=state.buildRole;r.layer=state.layer;r.doorsOpen=true;state.rooms.push(r);state.selected=r.id;state.selectedDecor=null;buildWorld();if(r.role==='hall'&&r.layer==='surface')spawnWorkers();constructionBurst(r);if(preferences.autosave)save(true);toast(`${type.name} raised · ${cost} gold`);}}
     else {state.selected=pickRoom(e);updateSelection();if(!state.selected){const type=ROOM_TYPES[state.buildRole],cost=r.w*r.d*type.cost;toast(isValidRect(r)&&state.gold<cost?`Need ${cost} gold for this ${type.name.toLowerCase()}`:'Blocked — choose empty ground');}}
     state.dragStart=state.dragEnd=null;previewGroup.clear();
   }
@@ -515,8 +526,9 @@ function assignWorkerTask(worker){
 }
 function updateWorker(worker,dt){
   const u=worker.userData;u.hunger=Math.max(0,u.hunger-dt*.42);u.rest=Math.max(0,u.rest-dt*.18);u.morale=Math.max(15,Math.min(100,u.morale+dt*(u.hunger>35?.05:-.18)));
-  if(!u.path.length){const room=state.rooms.find(r=>r.id===u.targetRoom);if(room?.role==='kitchen'&&state.food>=1&&u.hunger<85){state.food-=1;u.hunger=Math.min(100,u.hunger+28);}if(room?.role==='barracks')u.rest=Math.min(100,u.rest+dt*8);if(Math.floor(state.simTime+u.index)%4===0)assignWorkerTask(worker);return;}
+  if(!u.path.length){u.leftArm.rotation.x*=.82;u.rightArm.rotation.x*=.82;u.leftLeg.rotation.x*=.82;u.rightLeg.rotation.x*=.82;const room=state.rooms.find(r=>r.id===u.targetRoom);if(room?.role==='kitchen'&&state.food>=1&&u.hunger<85){state.food-=1;u.hunger=Math.min(100,u.hunger+28);}if(room?.role==='barracks')u.rest=Math.min(100,u.rest+dt*8);if(Math.floor(state.simTime+u.index)%4===0)assignWorkerTask(worker);return;}
   const cell=u.path[0],target=new THREE.Vector3((cell.x+.5)*CELL,.08,(cell.z+.5)*CELL),delta=target.clone().sub(worker.position);if(delta.length()<.07)u.path.shift();else{worker.rotation.y=Math.atan2(delta.x,delta.z);worker.position.addScaledVector(delta.normalize(),Math.min(1.75*dt,delta.length()));worker.position.y=.08+Math.abs(Math.sin(state.simTime*7+u.index))*.035;}
+  const swing=Math.sin(state.simTime*8+u.walkPhase)*.55;u.leftArm.rotation.x=swing;u.rightArm.rotation.x=-swing;u.leftLeg.rotation.x=-swing*.65;u.rightLeg.rotation.x=swing*.65;
 }
 function simulateStep(){
   const operational=state.rooms.filter(roomOperational),treasuries=operational.filter(r=>r.role==='treasury').length,kitchens=operational.filter(r=>r.role==='kitchen').length,farms=operational.filter(r=>r.role==='farm').length,stores=operational.filter(r=>r.role==='storehouse').length,forges=operational.filter(r=>r.role==='forge').length;
